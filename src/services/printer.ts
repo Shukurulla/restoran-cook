@@ -78,7 +78,7 @@ export const PrinterAPI = {
 
   // Print directly from newItems (when order object is not available)
   async printNewItems(
-    items: Array<{ foodName: string; quantity: number; category?: string }>,
+    items: Array<Record<string, unknown>>,
     tableName: string,
     tableNumber: number,
     waiterName: string,
@@ -86,15 +86,24 @@ export const PrinterAPI = {
     printerName?: string
   ): Promise<{ success: boolean; error?: string }> {
     try {
+      // Item nomini turli key'lardan olish (foodName, name, title)
+      const mappedItems = items.map(item => {
+        const name = (item.foodName || item.name || item.title || 'Noma\'lum') as string;
+        const quantity = (item.quantity || item.count || 1) as number;
+        const category = (item.category || item.categoryName || '') as string;
+
+        console.log('Mapping item:', { original: item, mapped: { name, quantity, category } });
+
+        return { name, quantity, category };
+      });
+
+      console.log('Sending to printer:', { items: mappedItems, tableName, tableNumber });
+
       const res = await fetch(`${PRINT_SERVER_URL}/print/order`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          items: items.map(item => ({
-            name: item.foodName,
-            quantity: item.quantity,
-            category: item.category,
-          })),
+          items: mappedItems,
           tableName,
           tableNumber,
           waiterName,

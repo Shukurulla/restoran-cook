@@ -139,7 +139,7 @@ export function Dashboard() {
         order: FoodItem | null;
         allOrders: FoodItem[];
         isNewOrder: boolean;
-        newItems?: Array<{ foodName: string; quantity: number; category?: string }>;
+        newItems?: Array<Record<string, unknown>>;
       }) => {
         console.log("=== NEW KITCHEN ORDER EVENT ===");
         console.log("isNewOrder:", data.isNewOrder);
@@ -172,7 +172,7 @@ export function Dashboard() {
 
           // Unique print key - newItems hash + timestamp (5 sekund ichida bir xil print qilmaslik)
           const timestamp = Math.floor(Date.now() / 5000); // 5 sekund interval
-          const printKey = `${tableName}-${timestamp}-${data.newItems.map(i => `${i.foodName}:${i.quantity}`).join(",")}`;
+          const printKey = `${tableName}-${timestamp}-${data.newItems.map(i => `${i.foodName || i.name || 'item'}:${i.quantity || 1}`).join(",")}`;
 
           if (!printedOrdersRef.current.has(printKey)) {
             printedOrdersRef.current.add(printKey);
