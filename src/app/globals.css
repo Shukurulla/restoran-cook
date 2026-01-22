@@ -96,17 +96,33 @@
 @layer base {
   * {
     @apply border-border outline-ring/50;
+    /* Disable text selection */
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+  }
+  /* Allow text selection only in input fields */
+  input, textarea {
+    -webkit-user-select: text;
+    -moz-user-select: text;
+    -ms-user-select: text;
+    user-select: text;
   }
   body {
     @apply bg-background text-foreground antialiased;
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   }
+  /* Force scrollbar to always show */
+  html {
+    overflow-y: scroll;
+  }
 }
 
-/* Custom scrollbar */
+/* Custom scrollbar - thick version */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 40px;
+  height: 40px;
 }
 
 ::-webkit-scrollbar-track {
@@ -115,9 +131,16 @@
 
 ::-webkit-scrollbar-thumb {
   background: var(--border);
-  border-radius: 3px;
+  border-radius: 20px;
+  border: 8px solid var(--card);
 }
 
 ::-webkit-scrollbar-thumb:hover {
   background: var(--border-hover);
+}
+
+/* Firefox scrollbar */
+* {
+  scrollbar-width: auto;
+  scrollbar-color: var(--border) var(--card);
 }
