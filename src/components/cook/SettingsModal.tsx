@@ -192,7 +192,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
               </label>
               <input
                 type="text"
-                value="3847"
+                value="3829"
                 readOnly
                 className="w-full h-10 px-3 bg-secondary border border-border rounded-lg text-muted-foreground"
               />
