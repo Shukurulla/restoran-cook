@@ -88,13 +88,13 @@ export const PrinterAPI = {
     try {
       // Item nomini turli key'lardan olish (foodName, name, title)
       const mappedItems = items.map(item => {
-        const name = (item.foodName || item.name || item.title || 'Noma\'lum') as string;
+        const foodName = (item.foodName || item.name || item.title || 'Noma\'lum') as string;
         const quantity = (item.quantity || item.count || 1) as number;
         const category = (item.category || item.categoryName || '') as string;
 
-        console.log('Mapping item:', { original: item, mapped: { name, quantity, category } });
+        console.log('Mapping item:', { original: item, mapped: { foodName, quantity, category } });
 
-        return { name, quantity, category };
+        return { foodName, quantity, category };
       });
 
       console.log('Sending to printer:', { items: mappedItems, tableName, tableNumber });
