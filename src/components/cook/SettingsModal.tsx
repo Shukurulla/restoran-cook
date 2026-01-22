@@ -1,10 +1,10 @@
-'use client';
+"use client";
 
-import { useState, useEffect } from 'react';
-import { PrinterInfo } from '@/types';
-import { PrinterAPI } from '@/services/printer';
-import { Button } from '@/components/ui/button';
-import { BiCog, BiPrinter, BiServer, BiRefresh, BiX } from 'react-icons/bi';
+import { useState, useEffect } from "react";
+import { PrinterInfo } from "@/types";
+import { PrinterAPI } from "@/services/printer";
+import { Button } from "@/components/ui/button";
+import { BiCog, BiPrinter, BiServer, BiRefresh, BiX } from "react-icons/bi";
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -13,25 +13,26 @@ interface SettingsModalProps {
 
 export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   const [printers, setPrinters] = useState<PrinterInfo[]>([]);
-  const [selectedPrinter, setSelectedPrinter] = useState<string>('');
+  const [selectedPrinter, setSelectedPrinter] = useState<string>("");
   const [autoPrint, setAutoPrint] = useState(true);
   const [printCancelled, setPrintCancelled] = useState(true);
-  const [serverUrl, setServerUrl] = useState('https://kepket.kerek.uz');
+  const [serverUrl, setServerUrl] = useState("https://server.kepket.uz");
   const [isLoadingPrinters, setIsLoadingPrinters] = useState(false);
   const [isPrinting, setIsPrinting] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
       loadPrinters();
-      const savedPrinter = localStorage.getItem('selectedPrinter');
-      const savedUrl = localStorage.getItem('serverUrl');
-      const savedAutoPrint = localStorage.getItem('autoPrint');
-      const savedPrintCancelled = localStorage.getItem('printCancelled');
+      const savedPrinter = localStorage.getItem("selectedPrinter");
+      const savedUrl = localStorage.getItem("serverUrl");
+      const savedAutoPrint = localStorage.getItem("autoPrint");
+      const savedPrintCancelled = localStorage.getItem("printCancelled");
 
       if (savedPrinter) setSelectedPrinter(savedPrinter);
       if (savedUrl) setServerUrl(savedUrl);
-      if (savedAutoPrint !== null) setAutoPrint(savedAutoPrint === 'true');
-      if (savedPrintCancelled !== null) setPrintCancelled(savedPrintCancelled === 'true');
+      if (savedAutoPrint !== null) setAutoPrint(savedAutoPrint === "true");
+      if (savedPrintCancelled !== null)
+        setPrintCancelled(savedPrintCancelled === "true");
     }
   }, [isOpen]);
 
@@ -41,13 +42,13 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
       const printerList = await PrinterAPI.getPrinters();
       setPrinters(printerList);
       if (printerList.length > 0 && !selectedPrinter) {
-        const defaultPrinter = printerList.find(p => p.isDefault);
+        const defaultPrinter = printerList.find((p) => p.isDefault);
         if (defaultPrinter) {
           setSelectedPrinter(defaultPrinter.name);
         }
       }
     } catch (error) {
-      console.error('Failed to load printers:', error);
+      console.error("Failed to load printers:", error);
     } finally {
       setIsLoadingPrinters(false);
     }
@@ -58,20 +59,20 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
     try {
       const result = await PrinterAPI.printTest(selectedPrinter || undefined);
       if (!result.success) {
-        alert('Test chop etish xatoligi: ' + result.error);
+        alert("Test chop etish xatoligi: " + result.error);
       }
     } catch {
-      alert('Printer server bilan bog\'lanib bo\'lmadi');
+      alert("Printer server bilan bog'lanib bo'lmadi");
     } finally {
       setIsPrinting(false);
     }
   };
 
   const handleSave = () => {
-    localStorage.setItem('selectedPrinter', selectedPrinter);
-    localStorage.setItem('serverUrl', serverUrl);
-    localStorage.setItem('autoPrint', String(autoPrint));
-    localStorage.setItem('printCancelled', String(printCancelled));
+    localStorage.setItem("selectedPrinter", selectedPrinter);
+    localStorage.setItem("serverUrl", serverUrl);
+    localStorage.setItem("autoPrint", String(autoPrint));
+    localStorage.setItem("printCancelled", String(printCancelled));
     onClose();
   };
 
@@ -104,7 +105,9 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
             </h3>
 
             <div className="space-y-2">
-              <label className="text-sm text-muted-foreground">Printer tanlang</label>
+              <label className="text-sm text-muted-foreground">
+                Printer tanlang
+              </label>
               <div className="flex gap-2">
                 <select
                   value={selectedPrinter}
@@ -114,7 +117,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                   <option value="">-- Printer tanlang --</option>
                   {printers.map((printer) => (
                     <option key={printer.name} value={printer.name}>
-                      {printer.displayName} {printer.isDefault && '(Default)'}
+                      {printer.displayName} {printer.isDefault && "(Default)"}
                     </option>
                   ))}
                 </select>
@@ -123,7 +126,9 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                   disabled={isLoadingPrinters}
                   className="px-3 bg-secondary border border-border rounded-lg text-muted-foreground hover:text-foreground hover:bg-[#262626] transition-colors"
                 >
-                  <BiRefresh className={isLoadingPrinters ? 'animate-spin' : ''} />
+                  <BiRefresh
+                    className={isLoadingPrinters ? "animate-spin" : ""}
+                  />
                 </button>
               </div>
             </div>
@@ -136,7 +141,9 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                   onChange={(e) => setAutoPrint(e.target.checked)}
                   className="w-4 h-4 rounded border-border bg-secondary text-[#3b82f6] focus:ring-[#3b82f6]"
                 />
-                <span className="text-sm">Avtomatik chop etish (yangi buyurtma kelganda)</span>
+                <span className="text-sm">
+                  Avtomatik chop etish (yangi buyurtma kelganda)
+                </span>
               </label>
 
               <label className="flex items-center gap-3 cursor-pointer">
@@ -156,7 +163,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
               className="w-full bg-primary text-primary-foreground"
             >
               <BiPrinter className="mr-2" />
-              {isPrinting ? 'Chop etilmoqda...' : 'Test chop etish'}
+              {isPrinting ? "Chop etilmoqda..." : "Test chop etish"}
             </Button>
           </div>
 
@@ -168,7 +175,9 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
             </h3>
 
             <div className="space-y-2">
-              <label className="text-sm text-muted-foreground">Server URL</label>
+              <label className="text-sm text-muted-foreground">
+                Server URL
+              </label>
               <input
                 type="text"
                 value={serverUrl}
@@ -178,7 +187,9 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm text-muted-foreground">Print Server Port</label>
+              <label className="text-sm text-muted-foreground">
+                Print Server Port
+              </label>
               <input
                 type="text"
                 value="3847"
@@ -194,7 +205,10 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
           <Button variant="outline" onClick={onClose} className="flex-1">
             Bekor qilish
           </Button>
-          <Button onClick={handleSave} className="flex-1 bg-[#22c55e] hover:bg-[#22c55e]/90 text-white">
+          <Button
+            onClick={handleSave}
+            className="flex-1 bg-[#22c55e] hover:bg-[#22c55e]/90 text-white"
+          >
             Saqlash
           </Button>
         </div>

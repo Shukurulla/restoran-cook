@@ -1,7 +1,7 @@
 import { User, Restaurant, FoodItem } from "@/types";
 
 const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL || "https://kepket.kerek.uz";
+  process.env.NEXT_PUBLIC_API_URL || "https://server.kepket.uz";
 
 class ApiService {
   private token: string | null = null;
@@ -79,7 +79,10 @@ class ApiService {
     return { user: data.staff, token: data.token, restaurant: data.restaurant };
   }
 
-  async getFoodItems(restaurantId: string, cookId?: string): Promise<FoodItem[]> {
+  async getFoodItems(
+    restaurantId: string,
+    cookId?: string,
+  ): Promise<FoodItem[]> {
     const params = new URLSearchParams({ restaurantId });
     if (cookId) {
       params.append("cookId", cookId);
@@ -90,13 +93,16 @@ class ApiService {
     return data.data;
   }
 
-  async markItemReady(orderId: string, itemIndex: number): Promise<{ data: FoodItem[]; updatedOrder: FoodItem }> {
-    const data = await this.request<{ data: FoodItem[]; updatedOrder: FoodItem }>(
-      `/api/kitchen-orders/${orderId}/items/${itemIndex}/ready`,
-      {
-        method: "PATCH",
-      },
-    );
+  async markItemReady(
+    orderId: string,
+    itemIndex: number,
+  ): Promise<{ data: FoodItem[]; updatedOrder: FoodItem }> {
+    const data = await this.request<{
+      data: FoodItem[];
+      updatedOrder: FoodItem;
+    }>(`/api/kitchen-orders/${orderId}/items/${itemIndex}/ready`, {
+      method: "PATCH",
+    });
     return data;
   }
 

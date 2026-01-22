@@ -1,21 +1,25 @@
-'use client';
+"use client";
 
-import { useState, useEffect, useCallback } from 'react';
-import { io, Socket } from 'socket.io-client';
-import { useAuth } from '@/context/AuthContext';
-import { api } from '@/services/api';
-import { FoodItem, Stats } from '@/types';
-import { Header } from './Header';
-import { FoodItemsList } from './FoodItemsList';
-import { SettingsModal } from './SettingsModal';
-import { BiVolumeFull, BiVolumeMute } from 'react-icons/bi';
+import { useState, useEffect, useCallback } from "react";
+import { io, Socket } from "socket.io-client";
+import { useAuth } from "@/context/AuthContext";
+import { api } from "@/services/api";
+import { FoodItem, Stats } from "@/types";
+import { Header } from "./Header";
+import { FoodItemsList } from "./FoodItemsList";
+import { SettingsModal } from "./SettingsModal";
+import { BiVolumeFull, BiVolumeMute } from "react-icons/bi";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://kepket.kerek.uz';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://server.kepket.uz";
 
 export function Dashboard() {
   const { user, restaurant } = useAuth();
   const [items, setItems] = useState<FoodItem[]>([]);
-  const [stats, setStats] = useState<Stats>({ pending: 0, ready: 0, cancelled: 0 });
+  const [stats, setStats] = useState<Stats>({
+    pending: 0,
+    ready: 0,
+    cancelled: 0,
+  });
   const [isConnected, setIsConnected] = useState(false);
   const [socket, setSocket] = useState<Socket | null>(null);
   const [soundEnabled, setSoundEnabled] = useState(true);
@@ -25,9 +29,9 @@ export function Dashboard() {
 
   // Audio for notifications
   const [audio] = useState(() => {
-    if (typeof window !== 'undefined') {
+    if (typeof window !== "undefined") {
       const a = new Audio();
-      a.src = 'https://kepket.kerek.uz/mixkit-positive-notification-951.wav';
+      a.src = "https://server.kepket.uz/mixkit-positive-notification-951.wav";
       return a;
     }
     return null;
@@ -38,15 +42,15 @@ export function Dashboard() {
     let ready = 0;
     let cancelled = 0;
 
-    ordersList.forEach(order => {
-      order.items.forEach(item => {
+    ordersList.forEach((order) => {
+      order.items.forEach((item) => {
         if (item.isReady) {
           ready++;
         } else {
           pending++;
         }
       });
-      if (order.status === 'cancelled') {
+      if (order.status === "cancelled") {
         cancelled++;
       }
     });
@@ -57,11 +61,14 @@ export function Dashboard() {
   const loadData = useCallback(async () => {
     try {
       if (!user?.restaurantId) return;
-      const itemsData = await api.getFoodItems(user.restaurantId, user.id || user._id);
+      const itemsData = await api.getFoodItems(
+        user.restaurantId,
+        user.id || user._id,
+      );
       setItems(itemsData);
       calculateStats(itemsData);
     } catch (error) {
-      console.error('Failed to load data:', error);
+      console.error("Failed to load data:", error);
     }
   }, [calculateStats, user]);
 
@@ -74,33 +81,43 @@ export function Dashboard() {
 
     const newSocket = io(API_URL, {
       auth: { token },
-      transports: ['websocket', 'polling'],
+      transports: ["websocket", "polling"],
     });
 
-    newSocket.on('connect', () => {
+    newSocket.on("connect", () => {
       setIsConnected(true);
       // Join cook room with cookId for filtered orders
-      newSocket.emit('cook_connect', { restaurantId: user.restaurantId, cookId });
+      newSocket.emit("cook_connect", {
+        restaurantId: user.restaurantId,
+        cookId,
+      });
     });
 
-    newSocket.on('disconnect', () => {
+    newSocket.on("disconnect", () => {
       setIsConnected(false);
     });
 
     // Listen for new kitchen orders (filtered by cook's categories)
-    newSocket.on('new_kitchen_order', async (data: { order: FoodItem; allOrders: FoodItem[]; isNewOrder: boolean }) => {
-      if (data.allOrders) {
-        setItems(data.allOrders);
-        calculateStats(data.allOrders);
-      }
+    newSocket.on(
+      "new_kitchen_order",
+      async (data: {
+        order: FoodItem;
+        allOrders: FoodItem[];
+        isNewOrder: boolean;
+      }) => {
+        if (data.allOrders) {
+          setItems(data.allOrders);
+          calculateStats(data.allOrders);
+        }
 
-      if (soundEnabled && data.isNewOrder) {
-        audio?.play().catch(() => {});
-      }
-    });
+        if (soundEnabled && data.isNewOrder) {
+          audio?.play().catch(() => {});
+        }
+      },
+    );
 
     // Listen for kitchen orders updated
-    newSocket.on('kitchen_orders_updated', (orders: FoodItem[]) => {
+    newSocket.on("kitchen_orders_updated", (orders: FoodItem[]) => {
       setItems(orders);
       calculateStats(orders);
     });
@@ -110,7 +127,14 @@ export function Dashboard() {
     return () => {
       newSocket.disconnect();
     };
-  }, [user?.restaurantId, user?.id, user?._id, audio, soundEnabled, calculateStats]);
+  }, [
+    user?.restaurantId,
+    user?.id,
+    user?._id,
+    audio,
+    soundEnabled,
+    calculateStats,
+  ]);
 
   // Initial data load
   useEffect(() => {
@@ -123,8 +147,8 @@ export function Dashboard() {
       setItems(allOrders);
       calculateStats(allOrders);
     } catch (error) {
-      console.error('Failed to mark ready:', error);
-      alert('Xatolik yuz berdi');
+      console.error("Failed to mark ready:", error);
+      alert("Xatolik yuz berdi");
     }
   };
 
@@ -136,22 +160,24 @@ export function Dashboard() {
         onSettingsClick={() => setIsSettingsOpen(true)}
       />
 
-      <FoodItemsList
-        items={items}
-        onMarkReady={handleMarkReady}
-      />
+      <FoodItemsList items={items} onMarkReady={handleMarkReady} />
 
       {/* Sound Toggle */}
       <button
         onClick={() => setSoundEnabled(!soundEnabled)}
         className={`fixed bottom-6 right-6 flex items-center gap-2 px-4 py-3 rounded-xl text-sm font-medium transition-colors
-          ${soundEnabled
-            ? 'bg-[#22c55e]/10 border border-[#22c55e]/30 text-[#22c55e]'
-            : 'bg-secondary border border-border text-muted-foreground'
+          ${
+            soundEnabled
+              ? "bg-[#22c55e]/10 border border-[#22c55e]/30 text-[#22c55e]"
+              : "bg-secondary border border-border text-muted-foreground"
           }`}
       >
-        {soundEnabled ? <BiVolumeFull className="text-lg" /> : <BiVolumeMute className="text-lg" />}
-        <span>{soundEnabled ? 'Ovoz yoqilgan' : 'Ovoz o\'chirilgan'}</span>
+        {soundEnabled ? (
+          <BiVolumeFull className="text-lg" />
+        ) : (
+          <BiVolumeMute className="text-lg" />
+        )}
+        <span>{soundEnabled ? "Ovoz yoqilgan" : "Ovoz o'chirilgan"}</span>
       </button>
 
       {/* Modals */}
