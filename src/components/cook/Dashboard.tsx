@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { io, Socket } from "socket.io-client";
 import { useAuth } from "@/context/AuthContext";
 import { api } from "@/services/api";
+import { PrinterAPI } from "@/services/printer";
 import { FoodItem, Stats } from "@/types";
 import { Header } from "./Header";
 import { FoodItemsList } from "./FoodItemsList";
@@ -27,6 +28,9 @@ export function Dashboard() {
   // Modal states
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
+  // Track printed orders to avoid duplicates
+  const printedOrdersRef = useRef<Set<string>>(new Set());
+
   // Audio for notifications
   const [audio] = useState(() => {
     if (typeof window !== "undefined") {
@@ -36,6 +40,37 @@ export function Dashboard() {
     }
     return null;
   });
+
+  // Auto-print function for new orders
+  const autoPrintOrder = useCallback(async (order: FoodItem) => {
+    // Check if auto-print is enabled
+    const autoPrintEnabled = localStorage.getItem("autoPrint") !== "false";
+    if (!autoPrintEnabled) return;
+
+    // Check if order already printed (by order ID)
+    const orderId = order._id;
+    if (!orderId || printedOrdersRef.current.has(orderId)) {
+      return;
+    }
+
+    // Mark as printed
+    printedOrdersRef.current.add(orderId);
+
+    // Get printer settings
+    const selectedPrinter = localStorage.getItem("selectedPrinter") || undefined;
+    const restaurantName = restaurant?.name || "Restoran";
+
+    try {
+      const result = await PrinterAPI.printOrder(order, restaurantName, selectedPrinter);
+      if (result.success) {
+        console.log(`Order ${orderId} printed successfully`);
+      } else {
+        console.error(`Failed to print order ${orderId}:`, result.error);
+      }
+    } catch (error) {
+      console.error("Auto-print error:", error);
+    }
+  }, [restaurant?.name]);
 
   const calculateStats = useCallback((ordersList: FoodItem[]) => {
     let pending = 0;
@@ -104,6 +139,7 @@ export function Dashboard() {
         order: FoodItem;
         allOrders: FoodItem[];
         isNewOrder: boolean;
+        newItems?: Array<{ foodName: string; quantity: number; category?: string }>;
       }) => {
         if (data.allOrders) {
           setItems(data.allOrders);
@@ -112,6 +148,11 @@ export function Dashboard() {
 
         if (soundEnabled && data.isNewOrder) {
           audio?.play().catch(() => {});
+        }
+
+        // Auto-print new order
+        if (data.isNewOrder && data.order) {
+          autoPrintOrder(data.order);
         }
       },
     );
@@ -134,6 +175,7 @@ export function Dashboard() {
     audio,
     soundEnabled,
     calculateStats,
+    autoPrintOrder,
   ]);
 
   // Initial data load
