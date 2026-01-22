@@ -2,7 +2,7 @@
 
 import { useAuth } from '@/context/AuthContext';
 import { Stats } from '@/types';
-import { BiCog, BiUser, BiLogOut } from 'react-icons/bi';
+import { BiCog, BiUser, BiLogOut, BiRefresh } from 'react-icons/bi';
 
 interface HeaderProps {
   stats: Stats;
@@ -45,6 +45,14 @@ export function Header({ stats, isConnected, onSettingsClick }: HeaderProps) {
           <span className={`w-2 h-2 rounded-full ${isConnected ? 'bg-[#22c55e] shadow-[0_0_8px_#22c55e]' : 'bg-[#ef4444]'}`} />
           <span>{isConnected ? 'Ulangan' : 'Ulanmagan'}</span>
         </div>
+
+        <button
+          onClick={() => window.location.reload()}
+          className="flex items-center gap-2 px-4 py-2 bg-[#3b82f6]/10 border border-[#3b82f6]/30 rounded-lg text-[#3b82f6] text-sm font-medium hover:bg-[#3b82f6]/20 hover:border-[#3b82f6] transition-colors"
+        >
+          <BiRefresh className="text-lg" />
+          Yangilash
+        </button>
 
         <button
           onClick={onSettingsClick}
