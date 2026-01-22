@@ -136,11 +136,17 @@ export function Dashboard() {
     newSocket.on(
       "new_kitchen_order",
       async (data: {
-        order: FoodItem;
+        order: FoodItem | null;
         allOrders: FoodItem[];
         isNewOrder: boolean;
         newItems?: Array<{ foodName: string; quantity: number; category?: string }>;
       }) => {
+        console.log("=== NEW KITCHEN ORDER EVENT ===");
+        console.log("isNewOrder:", data.isNewOrder);
+        console.log("order:", data.order);
+        console.log("allOrders count:", data.allOrders?.length);
+        console.log("newItems:", data.newItems);
+
         if (data.allOrders) {
           setItems(data.allOrders);
           calculateStats(data.allOrders);
@@ -150,9 +156,18 @@ export function Dashboard() {
           audio?.play().catch(() => {});
         }
 
-        // Auto-print new order
-        if (data.isNewOrder && data.order) {
-          autoPrintOrder(data.order);
+        // Auto-print: agar order bor bo'lsa - print qil
+        // Agar order null bo'lsa lekin newItems bor bo'lsa - allOrders'dan oxirgisini print qil
+        if (data.isNewOrder) {
+          if (data.order) {
+            console.log("Printing order directly:", data.order._id);
+            autoPrintOrder(data.order);
+          } else if (data.allOrders && data.allOrders.length > 0) {
+            // Order null kelgan - allOrders'dan eng yangisini print qilamiz
+            const latestOrder = data.allOrders[data.allOrders.length - 1];
+            console.log("Order is null, printing latest from allOrders:", latestOrder._id);
+            autoPrintOrder(latestOrder);
+          }
         }
       },
     );
