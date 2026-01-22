@@ -76,6 +76,40 @@ export const PrinterAPI = {
     }
   },
 
+  // Print directly from newItems (when order object is not available)
+  async printNewItems(
+    items: Array<{ foodName: string; quantity: number; category?: string }>,
+    tableName: string,
+    tableNumber: number,
+    waiterName: string,
+    restaurantName: string,
+    printerName?: string
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      const res = await fetch(`${PRINT_SERVER_URL}/print/order`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          items: items.map(item => ({
+            name: item.foodName,
+            quantity: item.quantity,
+            category: item.category,
+          })),
+          tableName,
+          tableNumber,
+          waiterName,
+          restaurantName,
+          date: new Date().toLocaleString('uz-UZ'),
+          printerName
+        })
+      });
+      return await res.json();
+    } catch (error) {
+      console.error('Failed to print new items:', error);
+      return { success: false, error: 'Printer server bilan bog\'lanib bo\'lmadi' };
+    }
+  },
+
   async checkConnection(): Promise<boolean> {
     try {
       const res = await fetch(`${PRINT_SERVER_URL}/health`, {

@@ -156,14 +156,48 @@ export function Dashboard() {
           audio?.play().catch(() => {});
         }
 
-        // Auto-print: agar order bor bo'lsa - print qil
-        // Agar order null bo'lsa lekin newItems bor bo'lsa - allOrders'dan oxirgisini print qil
-        if (data.isNewOrder) {
-          if (data.order) {
+        // Auto-print: newItems bor bo'lsa - to'g'ridan-to'g'ri print qil
+        const autoPrintEnabled = localStorage.getItem("autoPrint") !== "false";
+        if (data.isNewOrder && autoPrintEnabled) {
+          const selectedPrinter = localStorage.getItem("selectedPrinter") || undefined;
+          const restaurantName = restaurant?.name || "Restoran";
+
+          // 1-usul: newItems dan to'g'ridan-to'g'ri print qilish
+          if (data.newItems && data.newItems.length > 0) {
+            // tableName va tableNumber ni order yoki allOrders'dan olish
+            const orderInfo = data.order || (data.allOrders && data.allOrders.length > 0 ? data.allOrders[data.allOrders.length - 1] : null);
+            const tableName = orderInfo?.tableName || "Noma'lum stol";
+            const tableNumber = orderInfo?.tableNumber || 0;
+            const waiterName = orderInfo?.waiterName || "";
+
+            // Unique print key - newItems hash
+            const printKey = `${tableName}-${data.newItems.map(i => `${i.foodName}:${i.quantity}`).join(",")}`;
+            if (!printedOrdersRef.current.has(printKey)) {
+              printedOrdersRef.current.add(printKey);
+              console.log("Printing newItems directly:", data.newItems);
+              PrinterAPI.printNewItems(
+                data.newItems,
+                tableName,
+                tableNumber,
+                waiterName,
+                restaurantName,
+                selectedPrinter
+              ).then(result => {
+                if (result.success) {
+                  console.log("newItems printed successfully");
+                } else {
+                  console.error("Failed to print newItems:", result.error);
+                }
+              });
+            }
+          }
+          // 2-usul: order bor bo'lsa
+          else if (data.order) {
             console.log("Printing order directly:", data.order._id);
             autoPrintOrder(data.order);
-          } else if (data.allOrders && data.allOrders.length > 0) {
-            // Order null kelgan - allOrders'dan eng yangisini print qilamiz
+          }
+          // 3-usul: allOrders'dan oxirgisini
+          else if (data.allOrders && data.allOrders.length > 0) {
             const latestOrder = data.allOrders[data.allOrders.length - 1];
             console.log("Order is null, printing latest from allOrders:", latestOrder._id);
             autoPrintOrder(latestOrder);
@@ -191,6 +225,7 @@ export function Dashboard() {
     soundEnabled,
     calculateStats,
     autoPrintOrder,
+    restaurant?.name,
   ]);
 
   // Initial data load
