@@ -7,7 +7,7 @@ import { BiArchive } from 'react-icons/bi';
 
 interface FoodItemsListProps {
   items: FoodItem[];
-  onMarkReady: (order: FoodItem, itemIndex: number) => void;
+  onMarkReady: (order: FoodItem, itemIndex: number, readyCount?: number) => void;
 }
 
 // Flat item structure for display
@@ -41,8 +41,16 @@ export function FoodItemsList({ items, onMarkReady }: FoodItemsListProps) {
   }, [items]);
 
   // Filter items based on ready status
-  const pendingItems = flatItems.filter(f => !f.item.isReady);
-  const readyItems = flatItems.filter(f => f.item.isReady);
+  // Qisman tayyor bo'lgan itemlar ham tayyorlanmoqda tabida ko'rinadi
+  const pendingItems = flatItems.filter(f => {
+    const readyQty = f.item.readyQuantity || 0;
+    const remaining = f.item.quantity - readyQty;
+    return remaining > 0; // Qolgan miqdor bor bo'lsa - hali tayyor emas
+  });
+  const readyItems = flatItems.filter(f => {
+    const readyQty = f.item.readyQuantity || 0;
+    return readyQty >= f.item.quantity; // Hammasi tayyor
+  });
   const cancelledOrders = items.filter(order => order.status === 'cancelled');
 
   const filteredItems = tab === 'new'
@@ -101,7 +109,7 @@ export function FoodItemsList({ items, onMarkReady }: FoodItemsListProps) {
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {filteredItems.map((flatItem, index) => (
             <ItemCard
               key={`${flatItem.order._id}-${flatItem.itemIndex}-${index}`}

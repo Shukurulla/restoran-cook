@@ -79,7 +79,10 @@ export function Dashboard() {
 
     ordersList.forEach((order) => {
       order.items.forEach((item) => {
-        if (item.isReady) {
+        // Qisman tayyor bo'lgan itemlarni to'g'ri hisoblash
+        const readyQty = item.readyQuantity || 0;
+        const remaining = item.quantity - readyQty;
+        if (remaining <= 0) {
           ready++;
         } else {
           pending++;
@@ -211,11 +214,22 @@ export function Dashboard() {
     loadData();
   }, [loadData]);
 
-  const handleMarkReady = async (order: FoodItem, itemIndex: number) => {
+  const handleMarkReady = async (order: FoodItem, itemIndex: number, readyCount?: number) => {
     try {
-      const { data: allOrders } = await api.markItemReady(order._id, itemIndex);
-      setItems(allOrders);
-      calculateStats(allOrders);
+      // Agar readyCount berilgan bo'lsa - qisman tayyor qilish (socket orqali)
+      if (readyCount !== undefined && socket) {
+        socket.emit("partial_item_ready", {
+          orderId: order._id,
+          itemIndex,
+          readyCount,
+          restaurantId: user?.restaurantId,
+        });
+      } else {
+        // Eski usul - to'liq tayyor/tayyor emas qilish
+        const { data: allOrders } = await api.markItemReady(order._id, itemIndex);
+        setItems(allOrders);
+        calculateStats(allOrders);
+      }
     } catch (error) {
       console.error("Failed to mark ready:", error);
       alert("Xatolik yuz berdi");

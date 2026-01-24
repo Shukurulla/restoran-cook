@@ -106,6 +106,22 @@ class ApiService {
     return data;
   }
 
+  // Qisman tayyor qilish (partial ready)
+  async markItemPartialReady(
+    orderId: string,
+    itemIndex: number,
+    readyCount: number,
+  ): Promise<{ data: FoodItem[]; updatedOrder: FoodItem }> {
+    const data = await this.request<{
+      data: FoodItem[];
+      updatedOrder: FoodItem;
+    }>(`/api/kitchen-orders/${orderId}/items/${itemIndex}/partial-ready`, {
+      method: "PATCH",
+      body: JSON.stringify({ readyCount }),
+    });
+    return data;
+  }
+
   async notifyWaiter(orderId: string): Promise<FoodItem> {
     const data = await this.request<{ data: FoodItem }>(
       `/api/kitchen-orders/${orderId}/notify-waiter`,
