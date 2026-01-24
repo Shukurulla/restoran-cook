@@ -8,6 +8,8 @@ import { BiArchive } from 'react-icons/bi';
 interface FoodItemsListProps {
   items: FoodItem[];
   onMarkReady: (order: FoodItem, itemIndex: number, readyCount?: number) => void;
+  onRevertReady: (order: FoodItem, itemIndex: number, revertCount: number) => void;
+  removingItem: string | null;
 }
 
 // Flat item structure for display
@@ -17,7 +19,7 @@ interface FlatItem {
   itemIndex: number;
 }
 
-export function FoodItemsList({ items, onMarkReady }: FoodItemsListProps) {
+export function FoodItemsList({ items, onMarkReady, onRevertReady, removingItem }: FoodItemsListProps) {
   const [tab, setTab] = useState<TabType>('new');
 
   // Flatten all items from all orders
@@ -110,15 +112,21 @@ export function FoodItemsList({ items, onMarkReady }: FoodItemsListProps) {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {filteredItems.map((flatItem, index) => (
-            <ItemCard
-              key={`${flatItem.order._id}-${flatItem.itemIndex}-${index}`}
-              order={flatItem.order}
-              item={flatItem.item}
-              itemIndex={flatItem.itemIndex}
-              onMarkReady={onMarkReady}
-            />
-          ))}
+          {filteredItems.map((flatItem, index) => {
+            const itemKey = `${flatItem.order._id}-${flatItem.itemIndex}`;
+            const isRemoving = removingItem === itemKey;
+            return (
+              <ItemCard
+                key={`${flatItem.order._id}-${flatItem.itemIndex}-${index}`}
+                order={flatItem.order}
+                item={flatItem.item}
+                itemIndex={flatItem.itemIndex}
+                onMarkReady={onMarkReady}
+                onRevertReady={onRevertReady}
+                isRemoving={isRemoving}
+              />
+            );
+          })}
         </div>
       )}
     </div>

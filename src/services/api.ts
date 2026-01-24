@@ -111,13 +111,31 @@ class ApiService {
     orderId: string,
     itemIndex: number,
     readyCount: number,
+    cookId?: string,
   ): Promise<{ data: FoodItem[]; updatedOrder: FoodItem }> {
     const data = await this.request<{
       data: FoodItem[];
       updatedOrder: FoodItem;
     }>(`/api/kitchen-orders/${orderId}/items/${itemIndex}/partial-ready`, {
       method: "PATCH",
-      body: JSON.stringify({ readyCount }),
+      body: JSON.stringify({ readyCount, cookId }),
+    });
+    return data;
+  }
+
+  // Ortga qaytarish (revert ready)
+  async revertItemReady(
+    orderId: string,
+    itemIndex: number,
+    revertCount: number,
+    cookId?: string,
+  ): Promise<{ data: FoodItem[]; updatedOrder: FoodItem }> {
+    const data = await this.request<{
+      data: FoodItem[];
+      updatedOrder: FoodItem;
+    }>(`/api/kitchen-orders/${orderId}/items/${itemIndex}/revert-ready`, {
+      method: "PATCH",
+      body: JSON.stringify({ revertCount, cookId }),
     });
     return data;
   }
