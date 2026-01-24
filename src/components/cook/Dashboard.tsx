@@ -47,6 +47,9 @@ export function Dashboard() {
   // Animatsiya uchun - qaysi item o'chirilmoqda
   const [removingItem, setRemovingItem] = useState<string | null>(null);
 
+  // Loading state - tugmalarni disable qilish uchun
+  const [isLoading, setIsLoading] = useState(false);
+
   // Track printed orders to avoid duplicates
   const printedOrdersRef = useRef<Set<string>>(new Set());
 
@@ -234,7 +237,11 @@ export function Dashboard() {
   }, [loadData]);
 
   const handleMarkReady = async (order: FoodItem, itemIndex: number, readyCount?: number) => {
+    // Agar allaqachon loading bo'lsa, hech narsa qilmaymiz
+    if (isLoading) return;
+
     try {
+      setIsLoading(true);
       const cookId = user?.id || user?._id;
       const item = order.items[itemIndex];
       const foodName = item?.foodName || 'Taom';
@@ -245,7 +252,7 @@ export function Dashboard() {
       setRemovingItem(itemKey);
 
       if (readyCount !== undefined) {
-        // Qisman tayyor qilish - API orqali (waiter'ga notification ham API yuboradi)
+        // Qisman tayyor qilish - API orqali
         const { data: allOrders } = await api.markItemPartialReady(order._id, itemIndex, readyCount, cookId);
 
         // Modal ko'rsatish
@@ -262,6 +269,7 @@ export function Dashboard() {
           setRemovingItem(null);
           setItems(allOrders);
           calculateStats(allOrders);
+          setIsLoading(false);
         }, 1000);
       } else {
         // Eski usul - to'liq tayyor/tayyor emas qilish
@@ -269,25 +277,32 @@ export function Dashboard() {
         setItems(allOrders);
         calculateStats(allOrders);
         setRemovingItem(null);
+        setIsLoading(false);
       }
     } catch (error) {
       console.error("Failed to mark ready:", error);
       setRemovingItem(null);
+      setIsLoading(false);
       alert("Xatolik yuz berdi");
     }
   };
 
   const handleRevertReady = async (order: FoodItem, itemIndex: number, revertCount: number) => {
+    // Agar allaqachon loading bo'lsa, hech narsa qilmaymiz
+    if (isLoading) return;
+
     try {
+      setIsLoading(true);
       const cookId = user?.id || user?._id;
       const item = order.items[itemIndex];
       const foodName = item?.foodName || 'Taom';
 
-      // Animatsiyani boshlash
-      const itemKey = `${order._id}-${itemIndex}`;
-      setRemovingItem(itemKey);
-
+      // Revert uchun animatsiya kerak emas - darhol yangilash
       const { data: allOrders } = await api.revertItemReady(order._id, itemIndex, revertCount, cookId);
+
+      // Darhol ma'lumotlarni yangilash (animatsiyasiz)
+      setItems(allOrders);
+      calculateStats(allOrders);
 
       // Modal ko'rsatish
       setNotification({
@@ -297,16 +312,14 @@ export function Dashboard() {
         foodName,
       });
 
-      // 1 sekunddan keyin modalni yopish va state'ni yangilash
+      // 1 sekunddan keyin modalni yopish
       setTimeout(() => {
         setNotification(prev => ({ ...prev, show: false }));
-        setRemovingItem(null);
-        setItems(allOrders);
-        calculateStats(allOrders);
+        setIsLoading(false);
       }, 1000);
     } catch (error) {
       console.error("Failed to revert ready:", error);
-      setRemovingItem(null);
+      setIsLoading(false);
       alert("Xatolik yuz berdi");
     }
   };
@@ -319,7 +332,7 @@ export function Dashboard() {
         onSettingsClick={() => setIsSettingsOpen(true)}
       />
 
-      <FoodItemsList items={items} onMarkReady={handleMarkReady} onRevertReady={handleRevertReady} removingItem={removingItem} />
+      <FoodItemsList items={items} onMarkReady={handleMarkReady} onRevertReady={handleRevertReady} removingItem={removingItem} isLoading={isLoading} />
 
       {/* Sound Toggle */}
       <button

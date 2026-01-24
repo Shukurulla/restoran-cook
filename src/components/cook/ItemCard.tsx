@@ -11,6 +11,7 @@ interface ItemCardProps {
   onMarkReady: (order: FoodItem, itemIndex: number, readyCount?: number) => void;
   onRevertReady: (order: FoodItem, itemIndex: number, revertCount: number) => void;
   isRemoving?: boolean;
+  isLoading?: boolean;
 }
 
 const getTimeDiff = (dateStr: string) => {
@@ -24,7 +25,7 @@ const getTimeDiff = (dateStr: string) => {
   return `${hours} soat ${remainingMinutes} daqiqa oldin`;
 };
 
-export function ItemCard({ order, item, itemIndex, onMarkReady, onRevertReady, isRemoving }: ItemCardProps) {
+export function ItemCard({ order, item, itemIndex, onMarkReady, onRevertReady, isRemoving, isLoading }: ItemCardProps) {
   // Qolgan miqdor (umumiy - tayyor qilingan)
   const alreadyReady = item.readyQuantity || 0;
   const remainingQuantity = item.quantity - alreadyReady;
@@ -32,16 +33,19 @@ export function ItemCard({ order, item, itemIndex, onMarkReady, onRevertReady, i
   // Local state - 1 dan boshlab ko'paytirib boradi
   const [pendingCount, setPendingCount] = useState(1);
 
+  // Vaqt uchun - item.addedAt yoki order.createdAt
+  const timeSource = item.addedAt || order.createdAt;
+
   // Vaqt ko'rsatkichi - dinamik yangilanadi
-  const [timeDiff, setTimeDiff] = useState(() => getTimeDiff(order.createdAt));
+  const [timeDiff, setTimeDiff] = useState(() => getTimeDiff(timeSource));
 
   // Har 30 sekundda vaqtni yangilash
   useEffect(() => {
-    const updateTime = () => setTimeDiff(getTimeDiff(order.createdAt));
+    const updateTime = () => setTimeDiff(getTimeDiff(timeSource));
     updateTime(); // Darhol yangilash
     const interval = setInterval(updateTime, 30000); // Har 30 sekundda
     return () => clearInterval(interval);
-  }, [order.createdAt]);
+  }, [timeSource]);
 
   const isFullyReady = remainingQuantity <= 0;
 
@@ -139,7 +143,9 @@ export function ItemCard({ order, item, itemIndex, onMarkReady, onRevertReady, i
               {/* Qisman yuborish - count ko'rsatiladi */}
               <button
                 onClick={handleSubmit}
-                className="flex-1 h-16 px-4 bg-[#3b82f6] rounded-xl text-white text-lg font-bold flex items-center justify-center gap-2 hover:bg-[#2563eb] transition-all active:scale-[0.98]"
+                disabled={isLoading}
+                className={`flex-1 h-16 px-4 rounded-xl text-white text-lg font-bold flex items-center justify-center gap-2 transition-all active:scale-[0.98]
+                  ${isLoading ? 'bg-[#3b82f6]/50 cursor-not-allowed' : 'bg-[#3b82f6] hover:bg-[#2563eb]'}`}
               >
                 <BiSend className="text-2xl" />
                 {pendingCount}x yuborish
@@ -149,7 +155,9 @@ export function ItemCard({ order, item, itemIndex, onMarkReady, onRevertReady, i
             {/* Barchasi tayyor */}
             <button
               onClick={handleAllReady}
-              className="w-full h-14 mt-2 px-4 bg-[#22c55e] rounded-xl text-white text-base font-semibold flex items-center justify-center gap-2 hover:bg-[#16a34a] transition-all active:scale-[0.98]"
+              disabled={isLoading}
+              className={`w-full h-14 mt-2 px-4 rounded-xl text-white text-base font-semibold flex items-center justify-center gap-2 transition-all active:scale-[0.98]
+                ${isLoading ? 'bg-[#22c55e]/50 cursor-not-allowed' : 'bg-[#22c55e] hover:bg-[#16a34a]'}`}
             >
               <BiCheckDouble className="text-xl" />
               Barchasi tayyor
@@ -167,7 +175,11 @@ export function ItemCard({ order, item, itemIndex, onMarkReady, onRevertReady, i
             {/* Ortga qaytarish tugmasi */}
             <button
               onClick={handleRevert}
-              className="w-full h-12 px-4 bg-[#f97316]/10 border border-[#f97316]/30 rounded-xl text-[#f97316] text-base font-medium flex items-center justify-center gap-2 hover:bg-[#f97316]/20 transition-all active:scale-[0.98]"
+              disabled={isLoading}
+              className={`w-full h-12 px-4 border rounded-xl text-base font-medium flex items-center justify-center gap-2 transition-all active:scale-[0.98]
+                ${isLoading
+                  ? 'bg-[#f97316]/5 border-[#f97316]/20 text-[#f97316]/50 cursor-not-allowed'
+                  : 'bg-[#f97316]/10 border-[#f97316]/30 text-[#f97316] hover:bg-[#f97316]/20'}`}
             >
               <BiUndo className="text-xl" />
               Ortga qaytarish

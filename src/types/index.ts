@@ -27,6 +27,7 @@ export interface OrderItem {
   isReady: boolean;
   readyQuantity?: number; // Qisman tayyor - nechta tayyor bo'lgani
   readyAt?: string;
+  addedAt?: string; // Item qo'shilgan vaqt
   originalIndex?: number;
 }
 

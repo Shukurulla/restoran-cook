@@ -10,6 +10,7 @@ interface FoodItemsListProps {
   onMarkReady: (order: FoodItem, itemIndex: number, readyCount?: number) => void;
   onRevertReady: (order: FoodItem, itemIndex: number, revertCount: number) => void;
   removingItem: string | null;
+  isLoading: boolean;
 }
 
 // Flat item structure for display
@@ -19,7 +20,7 @@ interface FlatItem {
   itemIndex: number;
 }
 
-export function FoodItemsList({ items, onMarkReady, onRevertReady, removingItem }: FoodItemsListProps) {
+export function FoodItemsList({ items, onMarkReady, onRevertReady, removingItem, isLoading }: FoodItemsListProps) {
   const [tab, setTab] = useState<TabType>('new');
 
   // Flatten all items from all orders
@@ -124,6 +125,7 @@ export function FoodItemsList({ items, onMarkReady, onRevertReady, removingItem 
                 onMarkReady={onMarkReady}
                 onRevertReady={onRevertReady}
                 isRemoving={isRemoving}
+                isLoading={isLoading}
               />
             );
           })}
