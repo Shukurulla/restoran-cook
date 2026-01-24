@@ -1,13 +1,78 @@
-import { PrinterInfo, FoodItem, OrderItem } from '@/types';
-import {
-  generateTestReceiptHTML,
-  generateOrderReceiptHTML,
-  generateCancelledReceiptHTML,
-} from '@/utils/receipt-generator';
+/**
+ * Cook Web - Printer API Service
+ * Port: 4000 (cook-electron backend)
+ * 
+ * Bu service cook-electron PrintService bilan bog'lanadi
+ * va TSPL/ESC-POS orqali professional cheklar chiqaradi
+ */
 
 const PRINT_SERVER_URL = 'http://localhost:4000';
 
+// ==================== TYPES ====================
+
+export interface PrinterInfo {
+  name: string;
+  displayName: string;
+  isDefault: boolean;
+}
+
+export interface OrderItem {
+  foodName: string;
+  quantity: number;
+  price?: number;
+}
+
+export interface OrderData {
+  tableName: string;
+  waiterName?: string;
+  items: OrderItem[];
+  restaurantName?: string;
+  createdAt?: string;
+}
+
+export interface CancelledData {
+  tableName: string;
+  foodName: string;
+  quantity: number;
+  price?: number;
+  restaurantName?: string;
+}
+
+export interface PrintResult {
+  success: boolean;
+  error?: string;
+  message?: string;
+}
+
+// ==================== HELPER FUNCTIONS ====================
+
+/**
+ * LocalStorage dan tanlangan printerni olish
+ */
+function getSelectedPrinter(): string | null {
+  if (typeof window !== 'undefined') {
+    return localStorage.getItem('selectedPrinter');
+  }
+  return null;
+}
+
+/**
+ * LocalStorage dan restoran nomini olish
+ */
+function getRestaurantName(): string {
+  if (typeof window !== 'undefined') {
+    const stored = localStorage.getItem('restaurantName');
+    if (stored) return stored;
+  }
+  return 'OSHXONA';
+}
+
+// ==================== PRINTER API ====================
+
 export const PrinterAPI = {
+  /**
+   * Mavjud printerlar ro'yxatini olish
+   */
   async getPrinters(): Promise<PrinterInfo[]> {
     try {
       const res = await fetch(`${PRINT_SERVER_URL}/printers`);
@@ -19,109 +84,154 @@ export const PrinterAPI = {
     }
   },
 
-  async printOrder(order: FoodItem, restaurantName: string, printerName?: string): Promise<{ success: boolean; error?: string }> {
+  /**
+   * Test cheki chop etish
+   */
+  async printTest(printerName?: string, restaurantName?: string): Promise<PrintResult> {
     try {
-      // Frontendda HTML generatsiya qilish
-      const html = generateOrderReceiptHTML({
-        items: order.items.map(item => ({
-          foodName: item.foodName,
-          quantity: item.quantity,
-        })),
-        tableName: order.tableName,
-        waiterName: order.waiterName,
-        restaurantName,
-        createdAt: new Date(),
+      const selectedPrinter = printerName || getSelectedPrinter();
+      
+      if (!selectedPrinter) {
+        return { success: false, error: 'Printer tanlanmagan. Sozlamalardan printer tanlang.' };
+      }
+
+      const res = await fetch(`${PRINT_SERVER_URL}/print/test`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          printerName: selectedPrinter,
+          restaurantName: restaurantName || getRestaurantName()
+        })
       });
-
-      return await this.printHTML(html, printerName);
-    } catch (error) {
-      console.error('Failed to print order:', error);
-      return { success: false, error: 'Printer server bilan bog\'lanib bo\'lmadi' };
-    }
-  },
-
-  async printCancelled(item: OrderItem, tableName: string, reason: string, restaurantName: string, printerName?: string): Promise<{ success: boolean; error?: string }> {
-    try {
-      // Frontendda HTML generatsiya qilish
-      const html = generateCancelledReceiptHTML({
-        foodName: item.foodName,
-        quantity: item.quantity,
-        tableName,
-        restaurantName,
-        price: item.price,
-      });
-
-      return await this.printHTML(html, printerName);
-    } catch (error) {
-      console.error('Failed to print cancelled:', error);
-      return { success: false, error: 'Printer server bilan bog\'lanib bo\'lmadi' };
-    }
-  },
-
-  async printTest(printerName?: string, restaurantName: string = 'KEPKET'): Promise<{ success: boolean; error?: string }> {
-    try {
-      // Frontendda HTML generatsiya qilish
-      const html = generateTestReceiptHTML(restaurantName);
-      return await this.printHTML(html, printerName);
+      return await res.json();
     } catch (error) {
       console.error('Failed to print test:', error);
       return { success: false, error: 'Printer server bilan bog\'lanib bo\'lmadi' };
     }
   },
 
-  // Print directly from newItems (when order object is not available)
-  async printNewItems(
-    items: Array<Record<string, unknown>>,
-    tableName: string,
-    tableNumber: number,
-    waiterName: string,
-    restaurantName: string,
-    printerName?: string
-  ): Promise<{ success: boolean; error?: string }> {
+  /**
+   * Buyurtma cheki chop etish (Oshxona uchun)
+   */
+  async printOrder(orderData: OrderData, printerName?: string): Promise<PrintResult> {
     try {
-      // Item nomini turli key'lardan olish (foodName, name, title)
-      const mappedItems = items.map(item => {
-        const foodName = (item.foodName || item.name || item.title || 'Noma\'lum') as string;
-        const quantity = (item.quantity || item.count || 1) as number;
-        return { foodName, quantity };
-      });
+      const selectedPrinter = printerName || getSelectedPrinter();
+      
+      if (!selectedPrinter) {
+        return { success: false, error: 'Printer tanlanmagan. Sozlamalardan printer tanlang.' };
+      }
 
-      // Frontendda HTML generatsiya qilish
-      const html = generateOrderReceiptHTML({
-        items: mappedItems,
-        tableName,
-        waiterName,
-        restaurantName,
-        createdAt: new Date(),
-      });
-
-      return await this.printHTML(html, printerName);
-    } catch (error) {
-      console.error('Failed to print new items:', error);
-      return { success: false, error: 'Printer server bilan bog\'lanib bo\'lmadi' };
-    }
-  },
-
-  // HTML to'g'ridan-to'g'ri chop etish
-  async printHTML(html: string, printerName?: string): Promise<{ success: boolean; error?: string }> {
-    try {
-      const res = await fetch(`${PRINT_SERVER_URL}/print/html`, {
+      const res = await fetch(`${PRINT_SERVER_URL}/print/order`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ html, printerName })
+        body: JSON.stringify({
+          printerName: selectedPrinter,
+          restaurantName: orderData.restaurantName || getRestaurantName(),
+          tableName: orderData.tableName,
+          waiterName: orderData.waiterName || '',
+          items: orderData.items.map(item => ({
+            foodName: item.foodName,
+            quantity: item.quantity
+          })),
+          createdAt: orderData.createdAt || new Date().toISOString()
+        })
       });
       return await res.json();
     } catch (error) {
-      console.error('Failed to print HTML:', error);
+      console.error('Failed to print order:', error);
       return { success: false, error: 'Printer server bilan bog\'lanib bo\'lmadi' };
     }
   },
 
+  /**
+   * Bekor qilish cheki chop etish
+   */
+  async printCancelled(data: CancelledData, printerName?: string): Promise<PrintResult> {
+    try {
+      const selectedPrinter = printerName || getSelectedPrinter();
+      
+      if (!selectedPrinter) {
+        return { success: false, error: 'Printer tanlanmagan. Sozlamalardan printer tanlang.' };
+      }
+
+      const res = await fetch(`${PRINT_SERVER_URL}/print/cancelled`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          printerName: selectedPrinter,
+          restaurantName: data.restaurantName || getRestaurantName(),
+          tableName: data.tableName,
+          foodName: data.foodName,
+          quantity: data.quantity,
+          price: data.price || 0
+        })
+      });
+      return await res.json();
+    } catch (error) {
+      console.error('Failed to print cancelled:', error);
+      return { success: false, error: 'Printer server bilan bog\'lanib bo\'lmadi' };
+    }
+  },
+
+  /**
+   * Raw text chop etish
+   */
+  async printRaw(text: string, printerName?: string): Promise<PrintResult> {
+    try {
+      const selectedPrinter = printerName || getSelectedPrinter();
+      
+      if (!selectedPrinter) {
+        return { success: false, error: 'Printer tanlanmagan' };
+      }
+
+      const res = await fetch(`${PRINT_SERVER_URL}/print/raw`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          printerName: selectedPrinter,
+          text: text
+        })
+      });
+      return await res.json();
+    } catch (error) {
+      console.error('Failed to print raw:', error);
+      return { success: false, error: 'Printer server bilan bog\'lanib bo\'lmadi' };
+    }
+  },
+
+  /**
+   * Printer tanlash va saqlash
+   */
+  selectPrinter(printerName: string): void {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('selectedPrinter', printerName);
+    }
+  },
+
+  /**
+   * Tanlangan printerni olish
+   */
+  getSelectedPrinter(): string | null {
+    return getSelectedPrinter();
+  },
+
+  /**
+   * Restoran nomini saqlash
+   */
+  setRestaurantName(name: string): void {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('restaurantName', name);
+    }
+  },
+
+  /**
+   * Printer server bilan aloqani tekshirish
+   */
   async checkConnection(): Promise<boolean> {
     try {
       const res = await fetch(`${PRINT_SERVER_URL}/health`, {
         method: 'GET',
-        signal: AbortSignal.timeout(2000)
+        signal: AbortSignal.timeout(3000)
       });
       return res.ok;
     } catch {
@@ -129,61 +239,30 @@ export const PrinterAPI = {
     }
   },
 
-  // Electron print-server ga to'g'ridan-to'g'ri /print/order endpoint orqali yuborish
-  async printOrderDirect(
-    tableName: string,
-    waiterName: string,
-    items: Array<{ foodName?: string; name?: string; quantity?: number }>,
-    printerName?: string
-  ): Promise<{ success: boolean; error?: string }> {
+  /**
+   * Server status olish
+   */
+  async getStatus(): Promise<{ connected: boolean; csharpService: string; printers: number }> {
     try {
-      // Item nomini standartlashtirish
-      const mappedItems = items.map(item => ({
-        foodName: item.foodName || item.name || 'Noma\'lum',
-        quantity: item.quantity || 1
-      }));
-
-      const res = await fetch(`${PRINT_SERVER_URL}/print/order`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          tableName,
-          waiterName,
-          items: mappedItems,
-          printerName
-        })
+      const res = await fetch(`${PRINT_SERVER_URL}/health`, {
+        method: 'GET',
+        signal: AbortSignal.timeout(3000)
       });
-      return await res.json();
-    } catch (error) {
-      console.error('Failed to print order direct:', error);
-      return { success: false, error: 'Printer server bilan bog\'lanib bo\'lmadi' };
-    }
-  },
-
-  // Bekor qilingan buyurtma uchun /print/cancelled endpoint
-  async printCancelledDirect(
-    tableName: string,
-    foodName: string,
-    quantity: number,
-    price?: number,
-    printerName?: string
-  ): Promise<{ success: boolean; error?: string }> {
-    try {
-      const res = await fetch(`${PRINT_SERVER_URL}/print/cancelled`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          tableName,
-          foodName,
-          quantity,
-          price,
-          printerName
-        })
-      });
-      return await res.json();
-    } catch (error) {
-      console.error('Failed to print cancelled direct:', error);
-      return { success: false, error: 'Printer server bilan bog\'lanib bo\'lmadi' };
+      const data = await res.json();
+      return {
+        connected: true,
+        csharpService: data.csharpService || 'unknown',
+        printers: data.printersCount || 0
+      };
+    } catch {
+      return {
+        connected: false,
+        csharpService: 'offline',
+        printers: 0
+      };
     }
   }
 };
+
+// Default export
+export default PrinterAPI;
