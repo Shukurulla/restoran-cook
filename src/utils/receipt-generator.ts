@@ -1,7 +1,7 @@
 /**
  * Receipt Generator - Plain Text format
  * Thermal printer uchun oddiy text
- * 32 belgili kenglik (58mm printer)
+ * 42 belgili kenglik (80mm printer - standart)
  */
 
 interface OrderItem {
@@ -27,7 +27,7 @@ interface CancelledData {
   price?: number;
 }
 
-const WIDTH = 32; // 58mm printer uchun (2 inch = ~32 belgi)
+const WIDTH = 42; // 80mm printer uchun (42 belgi standart)
 const SEP = "-".repeat(WIDTH);
 
 // Sana: 22.01.2026

@@ -157,47 +157,28 @@ export function Dashboard() {
           audio?.play().catch(() => {});
         }
 
-        // Auto-print: newItems bor bo'lsa - to'g'ridan-to'g'ri print qil
-        // isNewOrder tekshirmasdan, newItems bor bo'lsa print qilamiz
+        // Auto-print o'chirilgan - cook-electron o'zi chop etadi
+        // Agar cook-web dan ham print kerak bo'lsa, quyidagi kodni yoqing:
+        /*
         const autoPrintEnabled = localStorage.getItem("autoPrint") !== "false";
         if (autoPrintEnabled && data.newItems && data.newItems.length > 0) {
           const selectedPrinter = localStorage.getItem("selectedPrinter") || undefined;
           const restaurantName = restaurant?.name || "Restoran";
-
-          // tableName va tableNumber ni order yoki allOrders'dan olish
           const orderInfo = data.order || (data.allOrders && data.allOrders.length > 0 ? data.allOrders[data.allOrders.length - 1] : null);
           const tableName = orderInfo?.tableName || "Noma'lum stol";
           const tableNumber = orderInfo?.tableNumber || 0;
           const waiterName = orderInfo?.waiterName || "";
 
-          // Unique print key - newItems hash + timestamp (5 sekund ichida bir xil print qilmaslik)
-          const timestamp = Math.floor(Date.now() / 5000); // 5 sekund interval
-          const printKey = `${tableName}-${timestamp}-${data.newItems.map(i => `${i.foodName || i.name || 'item'}:${i.quantity || 1}`).join(",")}`;
-
-          if (!printedOrdersRef.current.has(printKey)) {
-            printedOrdersRef.current.add(printKey);
-            console.log("=== PRINTING newItems ===");
-            console.log("tableName:", tableName);
-            console.log("items:", data.newItems);
-
-            PrinterAPI.printNewItems(
-              data.newItems,
-              tableName,
-              tableNumber,
-              waiterName,
-              restaurantName,
-              selectedPrinter
-            ).then(result => {
-              if (result.success) {
-                console.log("✅ newItems printed successfully");
-              } else {
-                console.error("❌ Failed to print newItems:", result.error);
-              }
-            });
-          } else {
-            console.log("⏭️ Skipping duplicate print:", printKey);
-          }
+          PrinterAPI.printNewItems(
+            data.newItems,
+            tableName,
+            tableNumber,
+            waiterName,
+            restaurantName,
+            selectedPrinter
+          );
         }
+        */
       },
     );
 
