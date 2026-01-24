@@ -157,28 +157,30 @@ export function Dashboard() {
           audio?.play().catch(() => {});
         }
 
-        // Auto-print o'chirilgan - cook-electron o'zi chop etadi
-        // Agar cook-web dan ham print kerak bo'lsa, quyidagi kodni yoqing:
-        /*
+        // Auto-print - yangi buyurtmalar uchun chek chiqarish
         const autoPrintEnabled = localStorage.getItem("autoPrint") !== "false";
         if (autoPrintEnabled && data.newItems && data.newItems.length > 0) {
           const selectedPrinter = localStorage.getItem("selectedPrinter") || undefined;
-          const restaurantName = restaurant?.name || "Restoran";
           const orderInfo = data.order || (data.allOrders && data.allOrders.length > 0 ? data.allOrders[data.allOrders.length - 1] : null);
           const tableName = orderInfo?.tableName || "Noma'lum stol";
-          const tableNumber = orderInfo?.tableNumber || 0;
           const waiterName = orderInfo?.waiterName || "";
 
-          PrinterAPI.printNewItems(
-            data.newItems,
+          // /print/order endpoint ga to'g'ridan-to'g'ri yuborish
+          PrinterAPI.printOrderDirect(
             tableName,
-            tableNumber,
             waiterName,
-            restaurantName,
+            data.newItems as Array<{ foodName?: string; name?: string; quantity?: number }>,
             selectedPrinter
-          );
+          ).then(result => {
+            if (result.success) {
+              console.log('Order printed successfully');
+            } else {
+              console.error('Print failed:', result.error);
+            }
+          }).catch(err => {
+            console.error('Print error:', err);
+          });
         }
-        */
       },
     );
 

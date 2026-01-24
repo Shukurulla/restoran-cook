@@ -127,5 +127,63 @@ export const PrinterAPI = {
     } catch {
       return false;
     }
+  },
+
+  // Electron print-server ga to'g'ridan-to'g'ri /print/order endpoint orqali yuborish
+  async printOrderDirect(
+    tableName: string,
+    waiterName: string,
+    items: Array<{ foodName?: string; name?: string; quantity?: number }>,
+    printerName?: string
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      // Item nomini standartlashtirish
+      const mappedItems = items.map(item => ({
+        foodName: item.foodName || item.name || 'Noma\'lum',
+        quantity: item.quantity || 1
+      }));
+
+      const res = await fetch(`${PRINT_SERVER_URL}/print/order`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tableName,
+          waiterName,
+          items: mappedItems,
+          printerName
+        })
+      });
+      return await res.json();
+    } catch (error) {
+      console.error('Failed to print order direct:', error);
+      return { success: false, error: 'Printer server bilan bog\'lanib bo\'lmadi' };
+    }
+  },
+
+  // Bekor qilingan buyurtma uchun /print/cancelled endpoint
+  async printCancelledDirect(
+    tableName: string,
+    foodName: string,
+    quantity: number,
+    price?: number,
+    printerName?: string
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      const res = await fetch(`${PRINT_SERVER_URL}/print/cancelled`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tableName,
+          foodName,
+          quantity,
+          price,
+          printerName
+        })
+      });
+      return await res.json();
+    } catch (error) {
+      console.error('Failed to print cancelled direct:', error);
+      return { success: false, error: 'Printer server bilan bog\'lanib bo\'lmadi' };
+    }
   }
 };
