@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { FoodItem, OrderItem } from '@/types';
-import { BiTable, BiUser, BiTime, BiCheck, BiMinus, BiPlus, BiSend } from 'react-icons/bi';
+import { BiTable, BiUser, BiTime, BiCheck, BiMinus, BiPlus, BiSend, BiCheckDouble } from 'react-icons/bi';
 
 interface ItemCardProps {
   order: FoodItem;
@@ -25,8 +25,8 @@ export function ItemCard({ order, item, itemIndex, onMarkReady }: ItemCardProps)
   const alreadyReady = item.readyQuantity || 0;
   const remainingQuantity = item.quantity - alreadyReady;
 
-  // Local state - nechta tayyor qilmoqchi
-  const [pendingCount, setPendingCount] = useState(remainingQuantity);
+  // Local state - 1 dan boshlab ko'paytirib boradi
+  const [pendingCount, setPendingCount] = useState(1);
 
   const isFullyReady = remainingQuantity <= 0;
 
@@ -44,9 +44,14 @@ export function ItemCard({ order, item, itemIndex, onMarkReady }: ItemCardProps)
 
   const handleSubmit = () => {
     onMarkReady(order, itemIndex, pendingCount);
-    // Reset to remaining after this submission
-    const newRemaining = remainingQuantity - pendingCount;
-    setPendingCount(newRemaining > 0 ? newRemaining : 0);
+    // Reset to 1 for next time
+    setPendingCount(1);
+  };
+
+  // Barchasi tayyor - qolgan hammasi
+  const handleAllReady = () => {
+    onMarkReady(order, itemIndex, remainingQuantity);
+    setPendingCount(1);
   };
 
   return (
@@ -80,52 +85,67 @@ export function ItemCard({ order, item, itemIndex, onMarkReady }: ItemCardProps)
 
         {/* +/- UI - faqat tayyor bo'lmaganda */}
         {!isFullyReady && (
-          <div className="flex items-center justify-between gap-3 bg-background/50 rounded-lg p-3">
-            {/* Minus button */}
-            <button
-              onClick={handleDecrease}
-              disabled={pendingCount <= 1}
-              className={`w-12 h-12 rounded-lg flex items-center justify-center text-2xl font-bold transition-all
-                ${pendingCount <= 1
-                  ? 'bg-[#262626] text-[#525252] cursor-not-allowed'
-                  : 'bg-[#ef4444] text-white hover:bg-[#dc2626] active:scale-95'
-                }`}
-            >
-              <BiMinus />
-            </button>
+          <>
+            <div className="flex items-center justify-between gap-3 bg-background/50 rounded-lg p-3">
+              {/* Minus button */}
+              <button
+                onClick={handleDecrease}
+                disabled={pendingCount <= 1}
+                className={`w-12 h-12 rounded-lg flex items-center justify-center text-2xl font-bold transition-all
+                  ${pendingCount <= 1
+                    ? 'bg-[#262626] text-[#525252] cursor-not-allowed'
+                    : 'bg-[#ef4444] text-white hover:bg-[#dc2626] active:scale-95'
+                  }`}
+              >
+                <BiMinus />
+              </button>
 
-            {/* Counter */}
-            <div className="flex-1 text-center">
-              <span className="text-3xl font-bold text-foreground">{pendingCount}</span>
-              <span className="text-muted-foreground text-sm ml-1">/ {remainingQuantity}</span>
+              {/* Counter */}
+              <div className="flex-1 text-center">
+                <span className="text-3xl font-bold text-foreground">{pendingCount}</span>
+                <span className="text-muted-foreground text-sm ml-1">/ {remainingQuantity}</span>
+              </div>
+
+              {/* Plus button */}
+              <button
+                onClick={handleIncrease}
+                disabled={pendingCount >= remainingQuantity}
+                className={`w-12 h-12 rounded-lg flex items-center justify-center text-2xl font-bold transition-all
+                  ${pendingCount >= remainingQuantity
+                    ? 'bg-[#262626] text-[#525252] cursor-not-allowed'
+                    : 'bg-[#22c55e] text-white hover:bg-[#16a34a] active:scale-95'
+                  }`}
+              >
+                <BiPlus />
+              </button>
             </div>
 
-            {/* Plus button */}
-            <button
-              onClick={handleIncrease}
-              disabled={pendingCount >= remainingQuantity}
-              className={`w-12 h-12 rounded-lg flex items-center justify-center text-2xl font-bold transition-all
-                ${pendingCount >= remainingQuantity
-                  ? 'bg-[#262626] text-[#525252] cursor-not-allowed'
-                  : 'bg-[#22c55e] text-white hover:bg-[#16a34a] active:scale-95'
-                }`}
-            >
-              <BiPlus />
-            </button>
-          </div>
+            {/* Buttons row */}
+            <div className="flex gap-2 mt-3">
+              {/* Qisman yuborish */}
+              <button
+                onClick={handleSubmit}
+                className="flex-1 py-3 px-4 bg-[#3b82f6] rounded-lg text-white text-base font-semibold flex items-center justify-center gap-2 hover:bg-[#2563eb] transition-all active:scale-[0.98]"
+              >
+                <BiSend className="text-xl" />
+                {pendingCount}x Yuborish
+              </button>
+
+              {/* Barchasi tayyor */}
+              <button
+                onClick={handleAllReady}
+                className="flex-1 py-3 px-4 bg-[#22c55e] rounded-lg text-white text-base font-semibold flex items-center justify-center gap-2 hover:bg-[#16a34a] transition-all active:scale-[0.98]"
+              >
+                <BiCheckDouble className="text-xl" />
+                Barchasi tayyor
+              </button>
+            </div>
+          </>
         )}
 
-        {/* Submit button */}
-        {!isFullyReady ? (
-          <button
-            onClick={handleSubmit}
-            className="w-full mt-3 py-3 px-5 bg-[#22c55e] rounded-lg text-white text-base font-semibold flex items-center justify-center gap-2 hover:bg-[#16a34a] transition-all active:scale-[0.98]"
-          >
-            <BiSend className="text-xl" />
-            {pendingCount}x Tayyor - Yuborish
-          </button>
-        ) : (
-          <div className="mt-3 py-3 px-5 bg-[#22c55e]/15 text-[#22c55e] rounded-lg text-base font-semibold flex items-center justify-center gap-2">
+        {/* Fully ready state */}
+        {isFullyReady && (
+          <div className="py-3 px-5 bg-[#22c55e]/15 text-[#22c55e] rounded-lg text-base font-semibold flex items-center justify-center gap-2">
             <BiCheck className="text-xl" />
             Hammasi tayyor!
           </div>

@@ -216,14 +216,11 @@ export function Dashboard() {
 
   const handleMarkReady = async (order: FoodItem, itemIndex: number, readyCount?: number) => {
     try {
-      // Agar readyCount berilgan bo'lsa - qisman tayyor qilish (socket orqali)
-      if (readyCount !== undefined && socket) {
-        socket.emit("partial_item_ready", {
-          orderId: order._id,
-          itemIndex,
-          readyCount,
-          restaurantId: user?.restaurantId,
-        });
+      if (readyCount !== undefined) {
+        // Qisman tayyor qilish - API orqali (waiter'ga notification ham API yuboradi)
+        const { data: allOrders } = await api.markItemPartialReady(order._id, itemIndex, readyCount);
+        setItems(allOrders);
+        calculateStats(allOrders);
       } else {
         // Eski usul - to'liq tayyor/tayyor emas qilish
         const { data: allOrders } = await api.markItemReady(order._id, itemIndex);
