@@ -5,7 +5,7 @@ import {
   generateCancelledReceiptHTML,
 } from '@/utils/receipt-generator';
 
-const PRINT_SERVER_URL = 'http://localhost:3847';
+const PRINT_SERVER_URL = 'http://localhost:4000';
 
 export const PrinterAPI = {
   async getPrinters(): Promise<PrinterInfo[]> {
