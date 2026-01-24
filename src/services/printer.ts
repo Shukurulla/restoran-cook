@@ -261,6 +261,44 @@ export const PrinterAPI = {
         printers: 0
       };
     }
+  },
+
+  /**
+   * Buyurtma chekini to'g'ridan-to'g'ri chop etish (Dashboard auto-print uchun)
+   */
+  async printOrderDirect(
+    tableName: string,
+    waiterName: string,
+    items: Array<{ foodName?: string; name?: string; quantity?: number }>,
+    printerName?: string
+  ): Promise<PrintResult> {
+    try {
+      const selectedPrinter = printerName || getSelectedPrinter();
+
+      if (!selectedPrinter) {
+        return { success: false, error: 'Printer tanlanmagan. Sozlamalardan printer tanlang.' };
+      }
+
+      const res = await fetch(`${PRINT_SERVER_URL}/print/order`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          printerName: selectedPrinter,
+          restaurantName: getRestaurantName(),
+          tableName: tableName,
+          waiterName: waiterName || '',
+          items: items.map(item => ({
+            foodName: item.foodName || item.name || 'Noma\'lum',
+            quantity: item.quantity || 1
+          })),
+          createdAt: new Date().toISOString()
+        })
+      });
+      return await res.json();
+    } catch (error) {
+      console.error('Failed to print order direct:', error);
+      return { success: false, error: 'Printer server bilan bog\'lanib bo\'lmadi' };
+    }
   }
 };
 
