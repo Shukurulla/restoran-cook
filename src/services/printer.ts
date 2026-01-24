@@ -113,7 +113,7 @@ export const PrinterAPI = {
   /**
    * Buyurtma cheki chop etish (Oshxona uchun)
    */
-  async printOrder(orderData: OrderData, printerName?: string): Promise<PrintResult> {
+  async printOrder(orderData: OrderData, restaurantName?: string, printerName?: string): Promise<PrintResult> {
     try {
       const selectedPrinter = printerName || getSelectedPrinter();
       
@@ -126,7 +126,7 @@ export const PrinterAPI = {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           printerName: selectedPrinter,
-          restaurantName: orderData.restaurantName || getRestaurantName(),
+          restaurantName: restaurantName || orderData.restaurantName || getRestaurantName(),
           tableName: orderData.tableName,
           waiterName: orderData.waiterName || '',
           items: orderData.items.map(item => ({
