@@ -5,11 +5,12 @@ import { io, Socket } from "socket.io-client";
 import { useAuth } from "@/context/AuthContext";
 import { api } from "@/services/api";
 import { PrinterAPI } from "@/services/printer";
+import { notificationService } from "@/services/notification";
 import { FoodItem, Stats } from "@/types";
 import { Header } from "./Header";
 import { FoodItemsList } from "./FoodItemsList";
 import { SettingsModal } from "./SettingsModal";
-import { BiVolumeFull, BiVolumeMute, BiCheck, BiUndo } from "react-icons/bi";
+import { BiVolumeFull, BiVolumeMute, BiCheck, BiUndo, BiBell, BiBellOff } from "react-icons/bi";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://server-v2.kepket.uz";
 
@@ -42,6 +43,9 @@ export function Dashboard() {
   // Modal states
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
+  // Push notification permission state
+  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>("default");
+
   // Notification modal - buyurtma jo'natilganda/qaytarilganda ko'rsatiladi
   const [notification, setNotification] = useState<NotificationModal>({
     show: false,
@@ -68,6 +72,32 @@ export function Dashboard() {
     }
     return null;
   });
+
+  // Request notification permission on page load
+  useEffect(() => {
+    const requestNotificationPermission = async () => {
+      if (notificationService.isSupported()) {
+        const permission = await notificationService.requestPermission();
+        setNotificationPermission(permission);
+        console.log("Notification permission:", permission);
+      }
+    };
+    requestNotificationPermission();
+  }, []);
+
+  // Handle sound toggle with permission request
+  const handleSoundToggle = async () => {
+    const newSoundEnabled = !soundEnabled;
+
+    // Request notification permission when enabling sound
+    if (newSoundEnabled && notificationService.getPermission() === "default") {
+      const permission = await notificationService.requestPermission();
+      setNotificationPermission(permission);
+    }
+
+    setSoundEnabled(newSoundEnabled);
+    notificationService.setSoundEnabled(newSoundEnabled);
+  };
 
   // Auto-print function for new orders
   const autoPrintOrder = useCallback(async (order: FoodItem) => {
@@ -211,9 +241,19 @@ export function Dashboard() {
           calculateStats(data.allOrders);
         }
 
-        // Play sound if newItems exists (new items added)
-        if (soundEnabled && data.newItems && data.newItems.length > 0) {
-          audio?.play().catch(() => {});
+        // Play sound and show push notification if newItems exists (new items added)
+        if (data.newItems && data.newItems.length > 0) {
+          const orderInfo = data.order || (data.allOrders && data.allOrders.length > 0 ? data.allOrders[data.allOrders.length - 1] : null);
+          const tableName = orderInfo?.tableName || "Yangi buyurtma";
+
+          // Show push notification and play sound
+          if (soundEnabled) {
+            notificationService.showNewOrderNotification(
+              tableName,
+              data.newItems.length,
+              data.newItems as Array<{ foodName?: string; name?: string; quantity?: number }>
+            );
+          }
         }
 
         // Auto-print - yangi buyurtmalar uchun chek chiqarish
@@ -373,23 +413,46 @@ export function Dashboard() {
 
       <FoodItemsList items={items} onMarkReady={handleMarkReady} onRevertReady={handleRevertReady} removingItem={removingItem} isLoading={isLoading} />
 
-      {/* Sound Toggle */}
-      <button
-        onClick={() => setSoundEnabled(!soundEnabled)}
-        className={`fixed bottom-6 right-6 flex items-center gap-2 px-4 py-3 rounded-xl text-sm font-medium transition-colors
-          ${
-            soundEnabled
-              ? "bg-[#22c55e]/10 border border-[#22c55e]/30 text-[#22c55e]"
-              : "bg-secondary border border-border text-muted-foreground"
-          }`}
-      >
-        {soundEnabled ? (
-          <BiVolumeFull className="text-lg" />
-        ) : (
-          <BiVolumeMute className="text-lg" />
+      {/* Sound & Notification Toggle */}
+      <div className="fixed bottom-6 right-6 flex flex-col gap-2">
+        {/* Notification Permission Status */}
+        {notificationPermission !== "granted" && (
+          <button
+            onClick={async () => {
+              const permission = await notificationService.requestPermission();
+              setNotificationPermission(permission);
+            }}
+            className="flex items-center gap-2 px-4 py-3 rounded-xl text-sm font-medium transition-colors bg-[#f97316]/10 border border-[#f97316]/30 text-[#f97316]"
+          >
+            <BiBell className="text-lg" />
+            <span>Bildirishnomaga ruxsat bering</span>
+          </button>
         )}
-        <span>{soundEnabled ? "Ovoz yoqilgan" : "Ovoz o'chirilgan"}</span>
-      </button>
+
+        {/* Sound Toggle */}
+        <button
+          onClick={handleSoundToggle}
+          className={`flex items-center gap-2 px-4 py-3 rounded-xl text-sm font-medium transition-colors
+            ${
+              soundEnabled
+                ? "bg-[#22c55e]/10 border border-[#22c55e]/30 text-[#22c55e]"
+                : "bg-secondary border border-border text-muted-foreground"
+            }`}
+        >
+          {soundEnabled ? (
+            <>
+              <BiVolumeFull className="text-lg" />
+              <BiBell className="text-lg" />
+            </>
+          ) : (
+            <>
+              <BiVolumeMute className="text-lg" />
+              <BiBellOff className="text-lg" />
+            </>
+          )}
+          <span>{soundEnabled ? "Ovoz yoqilgan" : "Ovoz o'chirilgan"}</span>
+        </button>
+      </div>
 
       {/* Modals */}
       <SettingsModal
