@@ -82,15 +82,43 @@ class ApiService {
   async getFoodItems(
     restaurantId: string,
     cookId?: string,
+    status?: "preparing" | "ready" | "all",
   ): Promise<FoodItem[]> {
     const params = new URLSearchParams({ restaurantId });
     if (cookId) {
       params.append("cookId", cookId);
     }
+    if (status) {
+      params.append("status", status);
+    }
     const data = await this.request<{ data: FoodItem[] }>(
       `/api/kitchen-orders?${params.toString()}`,
     );
     return data.data;
+  }
+
+  // Tayyorlanmoqda (pending + preparing) itemlarni olish
+  async getPreparingItems(
+    restaurantId: string,
+    cookId?: string,
+  ): Promise<FoodItem[]> {
+    return this.getFoodItems(restaurantId, cookId, "preparing");
+  }
+
+  // Tayyor (ready) itemlarni olish
+  async getReadyItems(
+    restaurantId: string,
+    cookId?: string,
+  ): Promise<FoodItem[]> {
+    return this.getFoodItems(restaurantId, cookId, "ready");
+  }
+
+  // Barcha itemlarni olish (preparing + ready)
+  async getAllItems(
+    restaurantId: string,
+    cookId?: string,
+  ): Promise<FoodItem[]> {
+    return this.getFoodItems(restaurantId, cookId, "all");
   }
 
   async markItemReady(

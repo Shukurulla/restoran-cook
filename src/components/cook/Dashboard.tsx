@@ -121,7 +121,8 @@ export function Dashboard() {
   const loadData = useCallback(async () => {
     try {
       if (!user?.restaurantId) return;
-      const itemsData = await api.getFoodItems(
+      // "all" status bilan - preparing va ready orderlarni ham olish
+      const itemsData = await api.getAllItems(
         user.restaurantId,
         user.id || user._id,
       );
