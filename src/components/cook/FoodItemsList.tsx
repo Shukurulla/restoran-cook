@@ -11,6 +11,7 @@ interface FoodItemsListProps {
   onRevertReady: (order: FoodItem, itemIndex: number, revertCount: number) => void;
   removingItem: string | null;
   isLoading: boolean;
+  requireDoubleConfirmation?: boolean; // Oshpaz profilidan
 }
 
 // Flat item structure for display
@@ -20,7 +21,7 @@ interface FlatItem {
   itemIndex: number;
 }
 
-export function FoodItemsList({ items, onMarkReady, onRevertReady, removingItem, isLoading }: FoodItemsListProps) {
+export function FoodItemsList({ items, onMarkReady, onRevertReady, removingItem, isLoading, requireDoubleConfirmation }: FoodItemsListProps) {
   const [tab, setTab] = useState<TabType>('new');
 
   // Flatten all items from all orders
@@ -137,6 +138,7 @@ export function FoodItemsList({ items, onMarkReady, onRevertReady, removingItem,
                 onRevertReady={onRevertReady}
                 isRemoving={isRemoving}
                 isLoading={isLoading}
+                requireDoubleConfirmation={requireDoubleConfirmation}
               />
             );
           })}

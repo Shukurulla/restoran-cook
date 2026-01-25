@@ -82,6 +82,7 @@ class ApiService {
       role: staff.role,
       restaurantId: staff.restaurantId,
       assignedCategories: staff.assignedCategories || [],
+      doubleConfirmation: staff.doubleConfirmation || false, // Ikki marta tasdiqlash
     };
 
     const restaurant: Restaurant = {
@@ -131,6 +132,7 @@ class ApiService {
         readyAt: item.readyAt,
         addedAt: item.addedAt || order.createdAt,
         originalIndex: idx,
+        kitchenStatus: item.kitchenStatus || 'pending',
       }));
 
       return {

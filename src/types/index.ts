@@ -8,6 +8,7 @@ export interface User {
   role: string;
   restaurantId: string;
   assignedCategories?: string[];
+  doubleConfirmation?: boolean; // Ikki marta tasdiqlash kerakmi
 }
 
 export interface Restaurant {
@@ -30,6 +31,7 @@ export interface OrderItem {
   addedAt?: string; // Item qo'shilgan vaqt
   originalIndex?: number;
   requireDoubleConfirmation?: boolean; // Ikki marta tasdiqlash kerak
+  kitchenStatus?: 'pending' | 'preparing' | 'ready' | 'served'; // Backend status
 }
 
 export interface FoodItem {

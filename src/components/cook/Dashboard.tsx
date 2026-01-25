@@ -29,6 +29,7 @@ export function Dashboard() {
   // Debug - Dashboard render bo'lganini tekshirish
   console.log("=== DASHBOARD RENDERED ===");
   console.log("user from useAuth:", user);
+  console.log("user?.doubleConfirmation:", user?.doubleConfirmation);
   console.log("restaurant from useAuth:", restaurant);
   const [stats, setStats] = useState<Stats>({
     pending: 0,
@@ -411,7 +412,14 @@ export function Dashboard() {
         onSettingsClick={() => setIsSettingsOpen(true)}
       />
 
-      <FoodItemsList items={items} onMarkReady={handleMarkReady} onRevertReady={handleRevertReady} removingItem={removingItem} isLoading={isLoading} />
+      <FoodItemsList
+        items={items}
+        onMarkReady={handleMarkReady}
+        onRevertReady={handleRevertReady}
+        removingItem={removingItem}
+        isLoading={isLoading}
+        requireDoubleConfirmation={user?.doubleConfirmation}
+      />
 
       {/* Sound & Notification Toggle */}
       <div className="fixed bottom-6 right-6 flex flex-col gap-2">
