@@ -52,11 +52,19 @@ export function ItemCard({ order, item, itemIndex, onMarkReady, onRevertReady, i
 
   // Har 30 sekundda vaqtni yangilash va props o'zgarganda
   useEffect(() => {
+    // Debug: vaqt qiymatlarini ko'rish
+    console.log('Time debug:', {
+      foodName: item.foodName,
+      addedAt: item.addedAt,
+      createdAt: order.createdAt,
+      timeSource,
+      parsed: new Date(timeSource).toISOString(),
+    });
     const updateTime = () => setTimeDiff(getTimeDiff(timeSource));
     updateTime(); // Darhol yangilash
     const interval = setInterval(updateTime, 30000); // Har 30 sekundda
     return () => clearInterval(interval);
-  }, [timeSource, item.foodId]);
+  }, [timeSource, item.foodId, item.foodName, order.createdAt, item.addedAt]);
 
   const isFullyReady = remainingQuantity <= 0;
 
