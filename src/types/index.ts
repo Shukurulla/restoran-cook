@@ -29,6 +29,7 @@ export interface OrderItem {
   readyAt?: string;
   addedAt?: string; // Item qo'shilgan vaqt
   originalIndex?: number;
+  requireDoubleConfirmation?: boolean; // Ikki marta tasdiqlash kerak
 }
 
 export interface FoodItem {
