@@ -14,8 +14,18 @@ interface ItemCardProps {
   isLoading?: boolean;
 }
 
-const getTimeDiff = (dateStr: string) => {
-  const diff = Date.now() - new Date(dateStr).getTime();
+const getTimeDiff = (dateStr: string | undefined | null): string => {
+  if (!dateStr) return 'Noma\'lum';
+
+  const date = new Date(dateStr);
+  // Invalid date check
+  if (isNaN(date.getTime())) return 'Noma\'lum';
+
+  const diff = Date.now() - date.getTime();
+
+  // Agar kelajakdagi vaqt bo'lsa (server vaqti farqi)
+  if (diff < 0) return 'Hozirgina';
+
   const minutes = Math.floor(diff / 60000);
   if (minutes < 1) return 'Hozirgina';
   if (minutes < 60) return `${minutes} daqiqa oldin`;
@@ -34,18 +44,19 @@ export function ItemCard({ order, item, itemIndex, onMarkReady, onRevertReady, i
   const [pendingCount, setPendingCount] = useState(1);
 
   // Vaqt uchun - item.addedAt yoki order.createdAt
-  const timeSource = item.addedAt || order.createdAt;
+  // Bo'sh string ham check qilinadi
+  const timeSource = (item.addedAt && item.addedAt.trim()) || order.createdAt;
 
   // Vaqt ko'rsatkichi - dinamik yangilanadi
-  const [timeDiff, setTimeDiff] = useState(() => getTimeDiff(timeSource));
+  const [timeDiff, setTimeDiff] = useState<string>('');
 
-  // Har 30 sekundda vaqtni yangilash
+  // Har 30 sekundda vaqtni yangilash va props o'zgarganda
   useEffect(() => {
     const updateTime = () => setTimeDiff(getTimeDiff(timeSource));
     updateTime(); // Darhol yangilash
     const interval = setInterval(updateTime, 30000); // Har 30 sekundda
     return () => clearInterval(interval);
-  }, [timeSource]);
+  }, [timeSource, item.foodId]);
 
   const isFullyReady = remainingQuantity <= 0;
 
