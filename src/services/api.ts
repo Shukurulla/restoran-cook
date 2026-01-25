@@ -1,7 +1,8 @@
-import { User, Restaurant, FoodItem } from "@/types";
+import { User, Restaurant, FoodItem, OrderItem } from "@/types";
 
+// Yangi backend v2 URL
 const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL || "https://server.kepket.uz";
+  process.env.NEXT_PUBLIC_API_URL || "https://server-v2.kepket.uz";
 
 class ApiService {
   private token: string | null = null;
@@ -56,45 +57,101 @@ class ApiService {
     return res.json();
   }
 
+  // ========== AUTH (yangi endpoint: /api/auth/login) ==========
   async login(
     phone: string,
     password: string,
   ): Promise<{ user: User; token: string; restaurant: Restaurant }> {
-    const data = await this.request<{
-      staff: User;
-      token: string;
-      restaurant: Restaurant;
-    }>("/api/staff/login", {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const data = await this.request<any>("/api/auth/login", {
       method: "POST",
       body: JSON.stringify({ phone, password }),
     });
 
-    this.setToken(data.token);
+    const responseData = data.data || data;
+    this.setToken(responseData.token);
+
+    const staff = responseData.staff;
+    const user: User = {
+      id: staff._id,
+      _id: staff._id,
+      firstName: staff.firstName,
+      lastName: staff.lastName,
+      name: `${staff.firstName} ${staff.lastName}`,
+      phone: staff.phone,
+      role: staff.role,
+      restaurantId: staff.restaurantId,
+      assignedCategories: staff.assignedCategories || [],
+    };
+
+    const restaurant: Restaurant = {
+      id: responseData.restaurant?._id || '',
+      _id: responseData.restaurant?._id || '',
+      name: responseData.restaurant?.name || '',
+    };
 
     if (typeof window !== "undefined") {
-      localStorage.setItem("user", JSON.stringify(data.staff));
-      localStorage.setItem("restaurant", JSON.stringify(data.restaurant));
+      localStorage.setItem("user", JSON.stringify(user));
+      localStorage.setItem("restaurant", JSON.stringify(restaurant));
     }
 
-    return { user: data.staff, token: data.token, restaurant: data.restaurant };
+    return { user, token: responseData.token, restaurant };
   }
 
+  // ========== KITCHEN ORDERS (yangi endpoint: /api/kitchen/orders) ==========
   async getFoodItems(
     restaurantId: string,
     cookId?: string,
     status?: "preparing" | "ready" | "all",
   ): Promise<FoodItem[]> {
-    const params = new URLSearchParams({ restaurantId });
-    if (cookId) {
-      params.append("cookId", cookId);
-    }
-    if (status) {
+    const params = new URLSearchParams();
+    if (status && status !== 'all') {
       params.append("status", status);
     }
-    const data = await this.request<{ data: FoodItem[] }>(
-      `/api/kitchen-orders?${params.toString()}`,
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const data = await this.request<any>(
+      `/api/kitchen/orders${params.toString() ? '?' + params.toString() : ''}`,
     );
-    return data.data;
+
+    const orders = data.data || [];
+
+    // Transform to FoodItem format
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return orders.map((order: any) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const items: OrderItem[] = (order.items || []).map((item: any, idx: number) => ({
+        foodId: item.foodId?._id || item.foodId || '',
+        foodName: item.foodId?.name || item.name || 'Noma\'lum',
+        category: item.foodId?.categoryId || '',
+        quantity: item.quantity || 1,
+        price: item.price || 0,
+        isReady: item.kitchenStatus === 'ready' || item.kitchenStatus === 'served',
+        readyQuantity: item.kitchenStatus === 'ready' ? item.quantity : 0,
+        readyAt: item.readyAt,
+        addedAt: item.addedAt || order.createdAt,
+        originalIndex: idx,
+      }));
+
+      return {
+        _id: order._id,
+        orderId: order._id,
+        restaurantId: order.restaurantId || restaurantId,
+        tableId: order.tableId?._id || order.tableId || '',
+        tableName: order.tableId?.number ? `Stol ${order.tableId.number}` : (order.tableName || ''),
+        tableNumber: order.tableId?.number || order.tableNumber || 0,
+        waiterId: order.waiterId?._id || order.waiterId || '',
+        waiterName: order.waiterId?.firstName
+          ? `${order.waiterId.firstName} ${order.waiterId.lastName}`
+          : '',
+        items,
+        status: order.status || 'pending',
+        allItemsReady: items.every((item: OrderItem) => item.isReady),
+        notifiedWaiter: false,
+        createdAt: order.createdAt,
+        waiterApproved: true,
+      } as FoodItem;
+    });
   }
 
   // Tayyorlanmoqda (pending + preparing) itemlarni olish
@@ -121,17 +178,26 @@ class ApiService {
     return this.getFoodItems(restaurantId, cookId, "all");
   }
 
+  // ========== KITCHEN ITEM STATUS ==========
   async markItemReady(
     orderId: string,
     itemIndex: number,
   ): Promise<{ data: FoodItem[]; updatedOrder: FoodItem }> {
-    const data = await this.request<{
-      data: FoodItem[];
-      updatedOrder: FoodItem;
-    }>(`/api/kitchen-orders/${orderId}/items/${itemIndex}/ready`, {
-      method: "PATCH",
-    });
-    return data;
+    // Yangi backend: /api/kitchen/orders/:orderId/items/:itemId/status
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await this.request<any>(
+      `/api/kitchen/orders/${orderId}/items/${itemIndex}/status`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({ status: "ready" }),
+      },
+    );
+
+    const restaurant = this.getStoredRestaurant();
+    const allItems = await this.getFoodItems(restaurant?.id || restaurant?._id || '');
+    const updatedOrder = allItems.find(item => item._id === orderId) || allItems[0];
+
+    return { data: allItems, updatedOrder };
   }
 
   // Qisman tayyor qilish (partial ready)
@@ -141,14 +207,20 @@ class ApiService {
     readyCount: number,
     cookId?: string,
   ): Promise<{ data: FoodItem[]; updatedOrder: FoodItem }> {
-    const data = await this.request<{
-      data: FoodItem[];
-      updatedOrder: FoodItem;
-    }>(`/api/kitchen-orders/${orderId}/items/${itemIndex}/partial-ready`, {
-      method: "PATCH",
-      body: JSON.stringify({ readyCount, cookId }),
-    });
-    return data;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await this.request<any>(
+      `/api/kitchen/orders/${orderId}/items/${itemIndex}/status`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({ status: "ready", readyCount, cookId }),
+      },
+    );
+
+    const restaurant = this.getStoredRestaurant();
+    const allItems = await this.getFoodItems(restaurant?.id || restaurant?._id || '');
+    const updatedOrder = allItems.find(item => item._id === orderId) || allItems[0];
+
+    return { data: allItems, updatedOrder };
   }
 
   // Ortga qaytarish (revert ready)
@@ -158,24 +230,62 @@ class ApiService {
     revertCount: number,
     cookId?: string,
   ): Promise<{ data: FoodItem[]; updatedOrder: FoodItem }> {
-    const data = await this.request<{
-      data: FoodItem[];
-      updatedOrder: FoodItem;
-    }>(`/api/kitchen-orders/${orderId}/items/${itemIndex}/revert-ready`, {
-      method: "PATCH",
-      body: JSON.stringify({ revertCount, cookId }),
-    });
-    return data;
-  }
-
-  async notifyWaiter(orderId: string): Promise<FoodItem> {
-    const data = await this.request<{ data: FoodItem }>(
-      `/api/kitchen-orders/${orderId}/notify-waiter`,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await this.request<any>(
+      `/api/kitchen/orders/${orderId}/items/${itemIndex}/status`,
       {
         method: "PATCH",
+        body: JSON.stringify({ status: "preparing", revertCount, cookId }),
       },
     );
-    return data.data;
+
+    const restaurant = this.getStoredRestaurant();
+    const allItems = await this.getFoodItems(restaurant?.id || restaurant?._id || '');
+    const updatedOrder = allItems.find(item => item._id === orderId) || allItems[0];
+
+    return { data: allItems, updatedOrder };
+  }
+
+  // Waiter ga xabar berish
+  async notifyWaiter(orderId: string): Promise<FoodItem> {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await this.request<any>(
+      `/api/kitchen/call-waiter`,
+      {
+        method: "POST",
+        body: JSON.stringify({ orderId }),
+      },
+    );
+
+    const restaurant = this.getStoredRestaurant();
+    const allItems = await this.getFoodItems(restaurant?.id || restaurant?._id || '');
+    return allItems.find(item => item._id === orderId) || allItems[0];
+  }
+
+  // Start preparing order
+  async startOrder(orderId: string): Promise<FoodItem> {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await this.request<any>(
+      `/api/kitchen/orders/${orderId}/start`,
+      { method: "POST" },
+    );
+
+    const restaurant = this.getStoredRestaurant();
+    const allItems = await this.getFoodItems(restaurant?.id || restaurant?._id || '');
+    return allItems.find(item => item._id === orderId) || allItems[0];
+  }
+
+  // Complete order
+  async completeOrder(orderId: string): Promise<FoodItem> {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await this.request<any>(
+      `/api/kitchen/orders/${orderId}/complete`,
+      { method: "POST" },
+    );
+
+    const restaurant = this.getStoredRestaurant();
+    const allItems = await this.getFoodItems(restaurant?.id || restaurant?._id || '');
+    return allItems.find(item => item._id === orderId) || allItems[0];
   }
 
   getStoredUser(): User | null {

@@ -11,7 +11,7 @@ import { FoodItemsList } from "./FoodItemsList";
 import { SettingsModal } from "./SettingsModal";
 import { BiVolumeFull, BiVolumeMute, BiCheck, BiUndo } from "react-icons/bi";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://server.kepket.uz";
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://server-v2.kepket.uz";
 
 // Notification modal type
 interface NotificationModal {
@@ -24,6 +24,11 @@ interface NotificationModal {
 export function Dashboard() {
   const { user, restaurant } = useAuth();
   const [items, setItems] = useState<FoodItem[]>([]);
+
+  // Debug - Dashboard render bo'lganini tekshirish
+  console.log("=== DASHBOARD RENDERED ===");
+  console.log("user from useAuth:", user);
+  console.log("restaurant from useAuth:", restaurant);
   const [stats, setStats] = useState<Stats>({
     pending: 0,
     ready: 0,
@@ -57,7 +62,7 @@ export function Dashboard() {
   const [audio] = useState(() => {
     if (typeof window !== "undefined") {
       const a = new Audio();
-      a.src = "https://server.kepket.uz/mixkit-positive-notification-951.wav";
+      a.src = "https://server-v2.kepket.uz/mixkit-positive-notification-951.wav";
       return a;
     }
     return null;
@@ -136,9 +141,24 @@ export function Dashboard() {
   // Socket connection
   useEffect(() => {
     const token = api.getToken();
-    if (!token || !user?.restaurantId) return;
+
+    console.log("=== SOCKET CHECK ===");
+    console.log("token:", token ? "exists" : "NULL");
+    console.log("user:", user);
+    console.log("user?.restaurantId:", user?.restaurantId);
+
+    if (!token || !user?.restaurantId) {
+      console.log("=== SOCKET SKIPPED - missing token or restaurantId ===");
+      return;
+    }
 
     const cookId = user.id || user._id;
+
+    console.log("=== SOCKET CONNECTING ===");
+    console.log("API_URL:", API_URL);
+    console.log("token:", token ? "exists" : "null");
+    console.log("restaurantId:", user.restaurantId);
+    console.log("cookId:", cookId);
 
     const newSocket = io(API_URL, {
       auth: { token },
@@ -146,6 +166,7 @@ export function Dashboard() {
     });
 
     newSocket.on("connect", () => {
+      console.log("=== SOCKET CONNECTED ===");
       setIsConnected(true);
       // Join cook room with cookId for filtered orders
       newSocket.emit("cook_connect", {
@@ -154,7 +175,12 @@ export function Dashboard() {
       });
     });
 
-    newSocket.on("disconnect", () => {
+    newSocket.on("connect_error", (error) => {
+      console.error("=== SOCKET CONNECT ERROR ===", error.message);
+    });
+
+    newSocket.on("disconnect", (reason) => {
+      console.log("=== SOCKET DISCONNECTED ===", reason);
       setIsConnected(false);
     });
 
@@ -197,13 +223,13 @@ export function Dashboard() {
             waiterName,
             data.newItems as Array<{ foodName?: string; name?: string; quantity?: number }>,
             selectedPrinter
-          ).then(result => {
+          ).then((result: { success: boolean; error?: string }) => {
             if (result.success) {
               console.log('Order printed successfully');
             } else {
               console.error('Print failed:', result.error);
             }
-          }).catch(err => {
+          }).catch((err: Error) => {
             console.error('Print error:', err);
           });
         }
