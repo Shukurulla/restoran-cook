@@ -2,7 +2,7 @@
 
 import { useAuth } from '@/context/AuthContext';
 import { Stats } from '@/types';
-import { BiCog, BiUser, BiLogOut, BiRefresh } from 'react-icons/bi';
+import { BiCog, BiUser, BiRefresh } from 'react-icons/bi';
 
 interface HeaderProps {
   stats: Stats;
@@ -11,7 +11,7 @@ interface HeaderProps {
 }
 
 export function Header({ stats, isConnected, onSettingsClick }: HeaderProps) {
-  const { user, restaurant, logout } = useAuth();
+  const { user, restaurant } = useAuth();
 
   return (
     <header className="flex justify-between items-center py-4 mb-6 border-b border-border">
@@ -69,14 +69,6 @@ export function Header({ stats, isConnected, onSettingsClick }: HeaderProps) {
           <BiUser className="text-lg" />
           <span>{user?.name}</span>
         </div>
-
-        <button
-          onClick={logout}
-          className="flex items-center gap-2 px-4 py-2 bg-[#ef4444]/10 border border-[#ef4444]/30 rounded-lg text-[#ef4444] text-sm font-medium hover:bg-[#ef4444]/20 hover:border-[#ef4444] transition-colors"
-        >
-          <BiLogOut className="text-lg" />
-          Chiqish
-        </button>
       </div>
     </header>
   );
