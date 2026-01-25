@@ -127,7 +127,7 @@ class ApiService {
         quantity: item.quantity || 1,
         price: item.price || 0,
         isReady: item.kitchenStatus === 'ready' || item.kitchenStatus === 'served',
-        readyQuantity: item.kitchenStatus === 'ready' ? item.quantity : 0,
+        readyQuantity: item.readyQuantity ?? (item.kitchenStatus === 'ready' ? item.quantity : 0),
         readyAt: item.readyAt,
         addedAt: item.addedAt || order.createdAt,
         originalIndex: idx,

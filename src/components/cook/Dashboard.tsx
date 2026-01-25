@@ -32,6 +32,7 @@ export function Dashboard() {
   const [stats, setStats] = useState<Stats>({
     pending: 0,
     ready: 0,
+    served: 0,
     cancelled: 0,
   });
   const [isConnected, setIsConnected] = useState(false);
@@ -102,25 +103,30 @@ export function Dashboard() {
   const calculateStats = useCallback((ordersList: FoodItem[]) => {
     let pending = 0;
     let ready = 0;
+    let served = 0;
     let cancelled = 0;
 
     ordersList.forEach((order) => {
-      order.items.forEach((item) => {
-        // Qisman tayyor bo'lgan itemlarni to'g'ri hisoblash
-        const readyQty = item.readyQuantity || 0;
-        const remaining = item.quantity - readyQty;
-        if (remaining <= 0) {
-          ready++;
-        } else {
-          pending++;
-        }
-      });
-      if (order.status === "cancelled") {
+      // Served orderlar uchun alohida hisoblash
+      if (order.status === 'served') {
+        served += order.items.length;
+      } else if (order.status === "cancelled") {
         cancelled++;
+      } else {
+        order.items.forEach((item) => {
+          // Qisman tayyor bo'lgan itemlarni to'g'ri hisoblash
+          const readyQty = item.readyQuantity || 0;
+          const remaining = item.quantity - readyQty;
+          if (remaining <= 0) {
+            ready++;
+          } else {
+            pending++;
+          }
+        });
       }
     });
 
-    setStats({ pending, ready, cancelled });
+    setStats({ pending, ready, served, cancelled });
   }, []);
 
   const loadData = useCallback(async () => {
@@ -199,7 +205,8 @@ export function Dashboard() {
         console.log("allOrders count:", data.allOrders?.length);
         console.log("newItems:", data.newItems);
 
-        if (data.allOrders) {
+        // Defensive check: ensure allOrders is an array
+        if (data.allOrders && Array.isArray(data.allOrders)) {
           setItems(data.allOrders);
           calculateStats(data.allOrders);
         }
@@ -238,8 +245,13 @@ export function Dashboard() {
 
     // Listen for kitchen orders updated
     newSocket.on("kitchen_orders_updated", (orders: FoodItem[]) => {
-      setItems(orders);
-      calculateStats(orders);
+      // Defensive check: ensure orders is an array
+      if (Array.isArray(orders)) {
+        setItems(orders);
+        calculateStats(orders);
+      } else {
+        console.error('kitchen_orders_updated received non-array:', orders);
+      }
     });
 
     setSocket(newSocket);

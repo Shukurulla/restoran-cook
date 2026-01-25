@@ -55,10 +55,11 @@ export interface PrinterInfo {
   isDefault: boolean;
 }
 
-export type TabType = 'new' | 'ready' | 'cancelled';
+export type TabType = 'new' | 'ready' | 'served' | 'cancelled';
 
 export interface Stats {
   pending: number;
   ready: number;
+  served: number;
   cancelled: number;
 }

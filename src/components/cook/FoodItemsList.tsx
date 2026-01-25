@@ -45,26 +45,35 @@ export function FoodItemsList({ items, onMarkReady, onRevertReady, removingItem,
 
   // Filter items based on ready status
   // Qisman tayyor bo'lgan itemlar ham tayyorlanmoqda tabida ko'rinadi
+  // Served orderlarni exclude qilish kerak
   const pendingItems = flatItems.filter(f => {
+    if (f.order.status === 'served') return false; // Served bo'lsa exclude
     const readyQty = f.item.readyQuantity || 0;
     const remaining = f.item.quantity - readyQty;
     return remaining > 0; // Qolgan miqdor bor bo'lsa - hali tayyor emas
   });
   const readyItems = flatItems.filter(f => {
+    if (f.order.status === 'served') return false; // Served bo'lsa exclude
     const readyQty = f.item.readyQuantity || 0;
     return readyQty >= f.item.quantity; // Hammasi tayyor
   });
   const cancelledOrders = items.filter(order => order.status === 'cancelled');
 
+  // Served items - waiter tomonidan yetkazilgan
+  const servedItems = flatItems.filter(f => f.order.status === 'served');
+
   const filteredItems = tab === 'new'
     ? pendingItems
     : tab === 'ready'
       ? readyItems
-      : [];
+      : tab === 'served'
+        ? servedItems
+        : [];
 
   const tabs = [
     { key: 'new' as TabType, label: 'Tayyorlanmoqda', count: pendingItems.length, color: 'text-[#f97316]' },
     { key: 'ready' as TabType, label: 'Tayyor', count: readyItems.length, color: 'text-[#22c55e]' },
+    { key: 'served' as TabType, label: 'Tugatilganlar', count: servedItems.length, color: 'text-[#3b82f6]' },
     { key: 'cancelled' as TabType, label: 'Rad etilgan', count: cancelledOrders.length, color: 'text-[#ef4444]' },
   ];
 
@@ -103,11 +112,13 @@ export function FoodItemsList({ items, onMarkReady, onRevertReady, removingItem,
           <h3 className="text-lg font-semibold mb-2">
             {tab === 'new' && 'Tayyorlanayotgan taom yo\'q'}
             {tab === 'ready' && 'Tayyor taomlar yo\'q'}
+            {tab === 'served' && 'Tugatilgan taomlar yo\'q'}
             {tab === 'cancelled' && 'Rad etilgan taomlar yo\'q'}
           </h3>
           <p className="text-[#71717a] text-sm">
             {tab === 'new' && 'Yangi buyurtmalar kelganda bu yerda ko\'rinadi'}
             {tab === 'ready' && 'Tayyor qilingan taomlar bu yerda ko\'rinadi'}
+            {tab === 'served' && 'Yetkazib berilgan taomlar bu yerda ko\'rinadi'}
             {tab === 'cancelled' && 'Rad etilgan taomlar bu yerda ko\'rinadi'}
           </p>
         </div>

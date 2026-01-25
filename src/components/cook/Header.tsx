@@ -35,6 +35,10 @@ export function Header({ stats, isConnected, onSettingsClick }: HeaderProps) {
           <span className="text-xs text-[#71717a] uppercase tracking-wider">Tayyor</span>
         </div>
         <div className="flex flex-col gap-0.5">
+          <span className="text-2xl font-semibold tabular-nums text-[#3b82f6]">{stats.served}</span>
+          <span className="text-xs text-[#71717a] uppercase tracking-wider">Tugatilgan</span>
+        </div>
+        <div className="flex flex-col gap-0.5">
           <span className="text-2xl font-semibold tabular-nums text-[#ef4444]">{stats.cancelled}</span>
           <span className="text-xs text-[#71717a] uppercase tracking-wider">Rad etilgan</span>
         </div>
