@@ -1,16 +1,17 @@
 'use client';
 
 import { useAuth } from '@/context/AuthContext';
-import { Stats } from '@/types';
-import { BiCog, BiUser, BiRefresh } from 'react-icons/bi';
+import { Stats, Shift } from '@/types';
+import { BiCog, BiUser, BiRefresh, BiTime } from 'react-icons/bi';
 
 interface HeaderProps {
   stats: Stats;
   isConnected: boolean;
+  activeShift: Shift | null;
   onSettingsClick: () => void;
 }
 
-export function Header({ stats, isConnected, onSettingsClick }: HeaderProps) {
+export function Header({ stats, isConnected, activeShift, onSettingsClick }: HeaderProps) {
   const { user, restaurant } = useAuth();
 
   return (
@@ -45,6 +46,19 @@ export function Header({ stats, isConnected, onSettingsClick }: HeaderProps) {
       </div>
 
       <div className="flex items-center gap-4">
+        {/* Shift status */}
+        {activeShift ? (
+          <div className="flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium bg-[#22c55e]/10 border border-[#22c55e]/30 text-[#22c55e]">
+            <BiTime className="text-lg" />
+            <span>Smena #{activeShift.shiftNumber}</span>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium bg-[#ef4444]/10 border border-[#ef4444]/30 text-[#ef4444]">
+            <BiTime className="text-lg" />
+            <span>Smena ochilmagan</span>
+          </div>
+        )}
+
         <div className={`flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium bg-secondary border border-border ${isConnected ? 'text-[#22c55e]' : 'text-[#ef4444]'}`}>
           <span className={`w-2 h-2 rounded-full ${isConnected ? 'bg-[#22c55e] shadow-[0_0_8px_#22c55e]' : 'bg-[#ef4444]'}`} />
           <span>{isConnected ? 'Ulangan' : 'Ulanmagan'}</span>

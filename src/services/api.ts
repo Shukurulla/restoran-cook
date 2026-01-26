@@ -1,4 +1,4 @@
-import { User, Restaurant, FoodItem, OrderItem } from "@/types";
+import { User, Restaurant, FoodItem, OrderItem, Shift } from "@/types";
 
 // Yangi backend v2 URL
 const API_BASE_URL =
@@ -301,6 +301,13 @@ class ApiService {
     if (typeof window === "undefined") return null;
     const restaurantStr = localStorage.getItem("restaurant");
     return restaurantStr ? JSON.parse(restaurantStr) : null;
+  }
+
+  // ========== SHIFT (SMENA) ==========
+  async getActiveShift(): Promise<Shift | null> {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const data = await this.request<any>('/api/shifts/active');
+    return data.data || null;
   }
 }
 

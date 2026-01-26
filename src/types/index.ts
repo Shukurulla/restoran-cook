@@ -66,3 +66,27 @@ export interface Stats {
   served: number;
   cancelled: number;
 }
+
+// Shift (Smena) types
+export interface Shift {
+  _id: string;
+  restaurantId: string;
+  shiftNumber: number;
+  status: 'active' | 'closed';
+  openedAt: string;
+  closedAt?: string;
+  openedBy: {
+    _id: string;
+    firstName: string;
+    lastName: string;
+  };
+  closedBy?: {
+    _id: string;
+    firstName: string;
+    lastName: string;
+  };
+  openingCash: number;
+  closingCash?: number;
+  duration?: number;
+  durationFormatted?: string;
+}

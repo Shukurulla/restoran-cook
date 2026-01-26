@@ -6,7 +6,7 @@ import { useAuth } from "@/context/AuthContext";
 import { api } from "@/services/api";
 import { PrinterAPI } from "@/services/printer";
 import { notificationService } from "@/services/notification";
-import { FoodItem, Stats } from "@/types";
+import { FoodItem, Stats, Shift } from "@/types";
 import { Header } from "./Header";
 import { FoodItemsList } from "./FoodItemsList";
 import { SettingsModal } from "./SettingsModal";
@@ -40,6 +40,7 @@ export function Dashboard() {
   const [isConnected, setIsConnected] = useState(false);
   const [socket, setSocket] = useState<Socket | null>(null);
   const [soundEnabled, setSoundEnabled] = useState(true);
+  const [activeShift, setActiveShift] = useState<Shift | null>(null);
 
   // Modal states
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -164,12 +165,13 @@ export function Dashboard() {
     try {
       if (!user?.restaurantId) return;
       // "all" status bilan - preparing va ready orderlarni ham olish
-      const itemsData = await api.getAllItems(
-        user.restaurantId,
-        user.id || user._id,
-      );
+      const [itemsData, shiftData] = await Promise.all([
+        api.getAllItems(user.restaurantId, user.id || user._id),
+        api.getActiveShift(),
+      ]);
       setItems(itemsData);
       calculateStats(itemsData);
+      setActiveShift(shiftData);
     } catch (error) {
       console.error("Failed to load data:", error);
     }
@@ -295,6 +297,24 @@ export function Dashboard() {
       }
     });
 
+    // Shift events (smena)
+    newSocket.on("shift:opened", (data: { shift: Shift }) => {
+      console.log("Smena ochildi:", data);
+      setActiveShift(data.shift);
+    });
+
+    newSocket.on("shift:closed", () => {
+      console.log("Smena yopildi");
+      setActiveShift(null);
+    });
+
+    newSocket.on("shift:updated", (data: { shift: Shift }) => {
+      console.log("Smena yangilandi:", data);
+      if (data.shift) {
+        setActiveShift(data.shift);
+      }
+    });
+
     setSocket(newSocket);
 
     return () => {
@@ -409,6 +429,7 @@ export function Dashboard() {
       <Header
         stats={stats}
         isConnected={isConnected}
+        activeShift={activeShift}
         onSettingsClick={() => setIsSettingsOpen(true)}
       />
 
