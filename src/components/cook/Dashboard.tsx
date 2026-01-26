@@ -27,10 +27,9 @@ export function Dashboard() {
   const [items, setItems] = useState<FoodItem[]>([]);
 
   // Debug - Dashboard render bo'lganini tekshirish
-  console.log("=== DASHBOARD RENDERED ===");
-  console.log("user from useAuth:", user);
-  console.log("user?.doubleConfirmation:", user?.doubleConfirmation);
-  console.log("restaurant from useAuth:", restaurant);
+  console.log("=== DASHBOARD RENDERED ===", new Date().toISOString());
+  console.log("user:", user ? { id: user.id, restaurantId: user.restaurantId } : "NULL");
+  console.log("token in localStorage:", typeof window !== 'undefined' ? (localStorage.getItem('token') ? 'EXISTS' : 'NULL') : 'SSR');
   const [stats, setStats] = useState<Stats>({
     pending: 0,
     ready: 0,
@@ -74,6 +73,13 @@ export function Dashboard() {
     }
     return null;
   });
+
+  // Simple debug useEffect - bu ishlayaptimi?
+  useEffect(() => {
+    console.log(">>> SIMPLE USEEFFECT WORKS <<<");
+    console.log(">>> user?.restaurantId:", user?.restaurantId);
+    console.log(">>> api.getToken():", api.getToken() ? "EXISTS" : "NULL");
+  }, [user?.restaurantId]);
 
   // Request notification permission on page load
   useEffect(() => {
@@ -179,25 +185,27 @@ export function Dashboard() {
 
   // Socket connection
   useEffect(() => {
-    const token = api.getToken();
-
-    console.log("=== SOCKET CHECK ===");
-    console.log("token:", token ? "exists" : "NULL");
-    console.log("user:", user);
+    console.log("============ SOCKET EFFECT ============");
     console.log("user?.restaurantId:", user?.restaurantId);
 
+    const token = api.getToken();
+    console.log("token:", token ? "EXISTS" : "NULL");
+
     if (!token || !user?.restaurantId) {
-      console.log("=== SOCKET SKIPPED - missing token or restaurantId ===");
+      console.log("SOCKET: SKIPPED (no token or restaurantId)");
       return;
     }
 
+    console.log("SOCKET: CONNECTING...");
+
     const cookId = user.id || user._id;
 
+    console.log("========================================");
     console.log("=== SOCKET CONNECTING ===");
     console.log("API_URL:", API_URL);
-    console.log("token:", token ? "exists" : "null");
     console.log("restaurantId:", user.restaurantId);
     console.log("cookId:", cookId);
+    console.log("========================================");
 
     const newSocket = io(API_URL, {
       auth: { token },
@@ -205,7 +213,8 @@ export function Dashboard() {
     });
 
     newSocket.on("connect", () => {
-      console.log("=== SOCKET CONNECTED ===");
+      console.log("SOCKET: CONNECTED!");
+      console.log("SOCKET: Emitting cook_connect with restaurantId:", user.restaurantId, "cookId:", cookId);
       setIsConnected(true);
       // Join cook room with cookId for filtered orders
       newSocket.emit("cook_connect", {
@@ -215,11 +224,11 @@ export function Dashboard() {
     });
 
     newSocket.on("connect_error", (error) => {
-      console.error("=== SOCKET CONNECT ERROR ===", error.message);
+      console.error("SOCKET: CONNECTION ERROR:", error.message);
     });
 
     newSocket.on("disconnect", (reason) => {
-      console.log("=== SOCKET DISCONNECTED ===", reason);
+      console.log("SOCKET: DISCONNECTED:", reason);
       setIsConnected(false);
     });
 
@@ -232,11 +241,9 @@ export function Dashboard() {
         isNewOrder: boolean;
         newItems?: Array<Record<string, unknown>>;
       }) => {
-        console.log("=== NEW KITCHEN ORDER EVENT ===");
-        console.log("isNewOrder:", data.isNewOrder);
-        console.log("order:", data.order);
-        console.log("allOrders count:", data.allOrders?.length);
-        console.log("newItems:", data.newItems);
+        console.log("======== NEW_KITCHEN_ORDER RECEIVED ========");
+        console.log("newItems count:", data.newItems?.length || 0);
+        console.log("newItems:", JSON.stringify(data.newItems, null, 2));
 
         // Defensive check: ensure allOrders is an array
         if (data.allOrders && Array.isArray(data.allOrders)) {
@@ -261,12 +268,7 @@ export function Dashboard() {
 
         // Auto-print - yangi buyurtmalar uchun chek chiqarish
         const autoPrintEnabled = localStorage.getItem("autoPrint") !== "false";
-
-        console.log("=== AUTO-PRINT DEBUG ===");
-        console.log("autoPrintEnabled:", autoPrintEnabled);
-        console.log("data.newItems:", data.newItems);
-        console.log("data.newItems length:", data.newItems?.length);
-        console.log("data.isNewOrder:", data.isNewOrder);
+        console.log("AUTO-PRINT enabled:", autoPrintEnabled);
 
         // newItems mavjud bo'lsa printerga yuborish
         if (autoPrintEnabled && data.newItems && data.newItems.length > 0) {
@@ -274,10 +276,8 @@ export function Dashboard() {
           const tableName = orderInfo?.tableName || "Noma'lum stol";
           const waiterName = orderInfo?.waiterName || "";
 
-          console.log("=== PRINTING ORDER ===");
-          console.log("Table:", tableName);
-          console.log("Waiter:", waiterName);
-          console.log("Items:", JSON.stringify(data.newItems, null, 2));
+          console.log(">>> SENDING TO PRINTER <<<");
+          console.log("Table:", tableName, "Waiter:", waiterName);
 
           // Print server ga yuborish (printer server o'zi tanlangan printerni ishlatadi)
           PrinterAPI.printOrderDirect(
@@ -285,16 +285,12 @@ export function Dashboard() {
             waiterName,
             data.newItems as Array<{ foodName?: string; name?: string; quantity?: number }>
           ).then((result: { success: boolean; error?: string }) => {
-            console.log("=== PRINT RESULT ===", result);
-            if (!result.success) {
-              console.error('Print failed:', result.error);
-            }
+            console.log(">>> PRINT RESULT:", result.success ? "SUCCESS" : "FAILED", result.error || "");
           }).catch((err: Error) => {
-            console.error('Print error:', err);
+            console.error(">>> PRINT ERROR:", err.message);
           });
         } else {
-          console.log("=== PRINT SKIPPED ===");
-          console.log("Reason:", !autoPrintEnabled ? "Auto-print disabled" : !data.newItems ? "No newItems" : "newItems is empty");
+          console.log("PRINT SKIPPED:", !autoPrintEnabled ? "disabled" : "no newItems");
         }
       },
     );
