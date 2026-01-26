@@ -25,9 +25,9 @@ export function FoodItemsList({
   const [tab, setTab] = useState<TabType>('new');
 
   // Orderlarni filterlash - har bir order o'z itemlari bilan
-  const { pendingOrders, servedOrders, cancelledOrders } = useMemo(() => {
-    const pending: FoodItem[] = [];
-    const served: FoodItem[] = [];
+  const { preparingOrders, completedOrders, cancelledOrders } = useMemo(() => {
+    const preparing: FoodItem[] = [];
+    const completed: FoodItem[] = [];
     const cancelled: FoodItem[] = [];
 
     items.forEach(order => {
@@ -36,45 +36,54 @@ export function FoodItemsList({
         return;
       }
 
-      if (order.status === 'served') {
-        served.push(order);
+      // Barcha itemlar tayyor yoki served bo'lganini tekshirish
+      const allItemsReady = order.items.length > 0 && order.items.every(item => {
+        const readyQty = item.readyQuantity || 0;
+        const isFullyReady = readyQty >= item.quantity;
+        const isReadyStatus = item.kitchenStatus === 'ready' || item.kitchenStatus === 'served';
+        return isFullyReady || isReadyStatus || item.isReady;
+      });
+
+      // Order status served/ready yoki barcha itemlar tayyor bo'lsa - tugatilganlar
+      if (order.status === 'served' || order.status === 'ready' || allItemsReady) {
+        completed.push(order);
         return;
       }
 
-      // Barcha orderlarni pending tabda ko'rsatamiz
-      pending.push({
+      // Aks holda - tayyorlanmoqda
+      preparing.push({
         ...order,
         items: order.items,
       });
     });
 
     // Vaqt bo'yicha saralash - eng eski birinchi
-    pending.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
-    served.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    preparing.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+    completed.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
-    return { pendingOrders: pending, servedOrders: served, cancelledOrders: cancelled };
+    return { preparingOrders: preparing, completedOrders: completed, cancelledOrders: cancelled };
   }, [items]);
 
-  // Pending itemlar soni (har bir orderdagi pending itemlar)
-  const pendingItemsCount = pendingOrders.reduce((sum, order) => {
+  // Tayyorlanayotgan itemlar soni (har bir orderdagi pending itemlar)
+  const preparingItemsCount = preparingOrders.reduce((sum, order) => {
     return sum + order.items.filter(item => {
       const readyQty = item.readyQuantity || 0;
       return item.quantity - readyQty > 0;
     }).length;
   }, 0);
 
-  // Served itemlar soni
-  const servedItemsCount = servedOrders.reduce((sum, order) => sum + order.items.length, 0);
+  // Tugatilgan itemlar soni
+  const completedItemsCount = completedOrders.reduce((sum, order) => sum + order.items.length, 0);
 
   const filteredOrders = tab === 'new'
-    ? pendingOrders
+    ? preparingOrders
     : tab === 'served'
-      ? servedOrders
+      ? completedOrders
       : cancelledOrders;
 
   const tabs = [
-    { key: 'new' as TabType, label: 'Tayyorlanmoqda', count: pendingItemsCount, orderCount: pendingOrders.length, color: 'text-[#f97316]' },
-    { key: 'served' as TabType, label: 'Tugatilganlar', count: servedItemsCount, orderCount: servedOrders.length, color: 'text-[#3b82f6]' },
+    { key: 'new' as TabType, label: 'Tayyorlanmoqda', count: preparingItemsCount, orderCount: preparingOrders.length, color: 'text-[#f97316]' },
+    { key: 'served' as TabType, label: 'Tugatilganlar', count: completedItemsCount, orderCount: completedOrders.length, color: 'text-[#22c55e]' },
     { key: 'cancelled' as TabType, label: 'Rad etilgan', count: cancelledOrders.length, orderCount: cancelledOrders.length, color: 'text-[#ef4444]' },
   ];
 
