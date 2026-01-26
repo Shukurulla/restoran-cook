@@ -31,7 +31,12 @@ export interface OrderItem {
   addedAt?: string; // Item qo'shilgan vaqt
   originalIndex?: number;
   requireDoubleConfirmation?: boolean; // Ikki marta tasdiqlash kerak
-  kitchenStatus?: 'pending' | 'preparing' | 'ready' | 'served'; // Backend status
+  kitchenStatus?: 'pending' | 'preparing' | 'ready' | 'served' | 'cancelled'; // Backend status
+  // Cancelled item fields
+  isCancelled?: boolean;
+  cancelledAt?: string;
+  cancelledBy?: string;
+  cancelReason?: string;
 }
 
 export interface FoodItem {

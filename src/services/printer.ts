@@ -265,7 +265,7 @@ export const PrinterAPI = {
 
   /**
    * Buyurtma chekini to'g'ridan-to'g'ri chop etish (Dashboard auto-print uchun)
-   * Print server o'zida saqlangan printerni ishlatadi agar printerName berilmasa
+   * Har doim localStorage dan tanlangan printerni yuboradi
    */
   async printOrderDirect(
     tableName: string,
@@ -277,13 +277,18 @@ export const PrinterAPI = {
     console.log("Input params:", { tableName, waiterName, itemsCount: items?.length, printerName });
 
     try {
-      // Printer name - client localStorage yoki print server o'zi hal qiladi
+      // Printer name - har doim client localStorage dan olish
       const selectedPrinter = printerName || getSelectedPrinter();
-      console.log("Selected printer from client:", selectedPrinter || "(server will use default)");
+      console.log("Selected printer from client:", selectedPrinter);
+
+      if (!selectedPrinter) {
+        console.warn("No printer selected! Check settings.");
+        return { success: false, error: 'Printer tanlanmagan. Sozlamalardan printer tanlang.' };
+      }
 
       const requestBody = {
-        // printerName undefined bo'lsa, print server o'zining store'dan oladi
-        printerName: selectedPrinter || undefined,
+        // Har doim printerName yuborish
+        printerName: selectedPrinter,
         restaurantName: getRestaurantName(),
         tableName: tableName,
         waiterName: waiterName || '',

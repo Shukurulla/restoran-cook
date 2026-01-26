@@ -39,6 +39,7 @@ function ItemRow({
   isRemoving,
   isLoading,
   requireDoubleConfirmation,
+  isCancelled,
 }: {
   order: FoodItem;
   item: OrderItem;
@@ -48,10 +49,29 @@ function ItemRow({
   isRemoving: boolean;
   isLoading: boolean;
   requireDoubleConfirmation?: boolean;
+  isCancelled?: boolean;
 }) {
   const alreadyReady = item.readyQuantity || 0;
   const remainingQuantity = item.quantity - alreadyReady;
   const isFullyReady = remainingQuantity <= 0;
+
+  // Item-level yoki order-level bekor qilish tekshiruvi
+  const isItemCancelled = isCancelled || item.isCancelled || item.kitchenStatus === 'cancelled';
+
+  // Bekor qilingan order/item uchun - faqat item ko'rsatish, button yo'q
+  if (isItemCancelled) {
+    return (
+      <div className={`flex items-center justify-between py-2 px-3 rounded-lg bg-[#ef4444]/10 border border-[#ef4444]/20 ${isRemoving ? 'opacity-50' : ''}`}>
+        <div className="flex items-center gap-2">
+          <span className="text-[#ef4444] font-medium line-through">{item.quantity}x</span>
+          <span className="text-[#ef4444] line-through">{item.foodName}</span>
+        </div>
+        <span className="text-xs text-[#ef4444] bg-[#ef4444]/10 px-2 py-1 rounded">
+          Bekor qilindi
+        </span>
+      </div>
+    );
+  }
 
   const [pendingCount, setPendingCount] = useState(1);
   const [waitingConfirmation, setWaitingConfirmation] = useState(false);
@@ -228,21 +248,34 @@ export function OrderCard({
   const totalItems = order.items.length;
   const readyItems = order.items.filter(item => (item.readyQuantity || 0) >= item.quantity).length;
   const allReady = readyItems === totalItems;
+  const isCancelled = order.status === 'cancelled';
 
   return (
     <div className={`rounded-xl border overflow-hidden transition-all ${
-      allReady ? 'bg-[#22c55e]/5 border-[#22c55e]/30' : 'bg-secondary border-border hover:border-[#404040]'
+      isCancelled
+        ? 'bg-[#ef4444]/5 border-[#ef4444]/30'
+        : allReady
+          ? 'bg-[#22c55e]/5 border-[#22c55e]/30'
+          : 'bg-secondary border-border hover:border-[#404040]'
     }`}>
       {/* Header */}
-      <div className={`px-4 py-3 border-b flex items-center justify-between ${allReady ? 'border-[#22c55e]/20' : 'border-border'}`}>
+      <div className={`px-4 py-3 border-b flex items-center justify-between ${
+        isCancelled ? 'border-[#ef4444]/20' : allReady ? 'border-[#22c55e]/20' : 'border-border'
+      }`}>
         <div className="flex items-center gap-3">
           <div className={`w-10 h-10 rounded-lg flex items-center justify-center text-xl ${
-            allReady ? 'bg-[#22c55e]/20 text-[#22c55e]' : 'bg-[#3b82f6]/20 text-[#3b82f6]'
+            isCancelled
+              ? 'bg-[#ef4444]/20 text-[#ef4444]'
+              : allReady
+                ? 'bg-[#22c55e]/20 text-[#22c55e]'
+                : 'bg-[#3b82f6]/20 text-[#3b82f6]'
           }`}>
             <BiTable />
           </div>
           <div>
-            <h3 className={`font-bold ${allReady ? 'text-[#22c55e]' : 'text-white'}`}>
+            <h3 className={`font-bold ${
+              isCancelled ? 'text-[#ef4444]' : allReady ? 'text-[#22c55e]' : 'text-white'
+            }`}>
               {order.tableName}
             </h3>
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -260,9 +293,13 @@ export function OrderCard({
           </div>
         </div>
         <div className={`px-2.5 py-1 rounded-lg text-xs font-semibold ${
-          allReady ? 'bg-[#22c55e]/20 text-[#22c55e]' : 'bg-[#f97316]/20 text-[#f97316]'
+          isCancelled
+            ? 'bg-[#ef4444]/20 text-[#ef4444]'
+            : allReady
+              ? 'bg-[#22c55e]/20 text-[#22c55e]'
+              : 'bg-[#f97316]/20 text-[#f97316]'
         }`}>
-          {readyItems}/{totalItems}
+          {isCancelled ? 'BEKOR QILINDI' : `${readyItems}/${totalItems}`}
         </div>
       </div>
 
@@ -282,6 +319,7 @@ export function OrderCard({
               isRemoving={removingItem === itemKey}
               isLoading={isLoading}
               requireDoubleConfirmation={requireDoubleConfirmation}
+              isCancelled={order.status === 'cancelled'}
             />
           );
         })}

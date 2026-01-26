@@ -36,8 +36,11 @@ export function FoodItemsList({
         return;
       }
 
-      // Barcha itemlar tayyor yoki served bo'lganini tekshirish
-      const allItemsReady = order.items.length > 0 && order.items.every(item => {
+      // Bekor qilinmagan itemlarni olish
+      const activeItems = order.items.filter(item => !item.isCancelled && item.kitchenStatus !== 'cancelled');
+
+      // Barcha itemlar tayyor yoki served bo'lganini tekshirish (faqat active itemlar)
+      const allItemsReady = activeItems.length > 0 && activeItems.every(item => {
         const readyQty = item.readyQuantity || 0;
         const isFullyReady = readyQty >= item.quantity;
         const isReadyStatus = item.kitchenStatus === 'ready' || item.kitchenStatus === 'served';
@@ -64,9 +67,11 @@ export function FoodItemsList({
     return { preparingOrders: preparing, completedOrders: completed, cancelledOrders: cancelled };
   }, [items]);
 
-  // Tayyorlanayotgan itemlar soni (har bir orderdagi pending itemlar)
+  // Tayyorlanayotgan itemlar soni (har bir orderdagi pending itemlar, cancelled itemlarni hisobga olmaymiz)
   const preparingItemsCount = preparingOrders.reduce((sum, order) => {
     return sum + order.items.filter(item => {
+      // Cancelled itemlarni hisobga olmaymiz
+      if (item.isCancelled || item.kitchenStatus === 'cancelled') return false;
       const readyQty = item.readyQuantity || 0;
       return item.quantity - readyQty > 0;
     }).length;

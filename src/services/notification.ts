@@ -16,9 +16,7 @@ class NotificationService {
   constructor() {
     if (typeof window !== "undefined") {
       this.permission = Notification.permission;
-      this.audio = new Audio(
-        "https://server-v2.kepket.uz/mixkit-positive-notification-951.wav"
-      );
+      this.audio = new Audio("/mixkit-positive-notification-951.wav");
     }
   }
 
@@ -89,13 +87,19 @@ class NotificationService {
 
   // Play notification sound
   async playSound(): Promise<void> {
-    if (!this.soundEnabled || !this.audio) return;
+    console.log("🔊 playSound called, soundEnabled:", this.soundEnabled, "audio:", !!this.audio);
+    if (!this.soundEnabled || !this.audio) {
+      console.log("🔊 Sound skipped - enabled:", this.soundEnabled, "audio exists:", !!this.audio);
+      return;
+    }
 
     try {
       this.audio.currentTime = 0;
+      console.log("🔊 Playing audio...");
       await this.audio.play();
+      console.log("🔊 Audio played successfully");
     } catch (error) {
-      console.warn("Could not play notification sound:", error);
+      console.warn("🔊 Could not play notification sound:", error);
     }
   }
 

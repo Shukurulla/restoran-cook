@@ -2,7 +2,7 @@ import { User, Restaurant, FoodItem, OrderItem, Shift } from "@/types";
 
 // Yangi backend v2 URL
 const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL || "https://server-v2.kepket.uz";
+  process.env.NEXT_PUBLIC_API_URL || "http://localhost:3010";
 
 class ApiService {
   private token: string | null = null;
@@ -134,6 +134,11 @@ class ApiService {
         // Backend dan kelgan originalIndex ni ishlatish, aks holda local index
         originalIndex: item.originalIndex !== undefined ? item.originalIndex : idx,
         kitchenStatus: item.kitchenStatus || 'pending',
+        // Cancelled item fields
+        isCancelled: item.status === 'cancelled' || item.kitchenStatus === 'cancelled',
+        cancelledAt: item.cancelledAt,
+        cancelledBy: item.cancelledBy,
+        cancelReason: item.cancelReason,
       }));
 
       return {

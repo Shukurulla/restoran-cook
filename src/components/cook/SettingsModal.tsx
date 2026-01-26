@@ -68,11 +68,27 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
     }
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
+    // Browser localStorage ga saqlash
     localStorage.setItem("selectedPrinter", selectedPrinter);
     localStorage.setItem("serverUrl", serverUrl);
     localStorage.setItem("autoPrint", String(autoPrint));
     localStorage.setItem("printCancelled", String(printCancelled));
+
+    // Electron print server ga ham yuborish (sync qilish)
+    if (selectedPrinter) {
+      try {
+        await fetch("http://localhost:4000/printers/select", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ printerName: selectedPrinter }),
+        });
+        console.log("Printer synced to Electron store:", selectedPrinter);
+      } catch (error) {
+        console.error("Failed to sync printer to Electron:", error);
+      }
+    }
+
     onClose();
   };
 

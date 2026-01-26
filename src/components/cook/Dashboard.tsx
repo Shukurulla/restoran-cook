@@ -64,21 +64,62 @@ export function Dashboard() {
   // Track printed orders to avoid duplicates
   const printedOrdersRef = useRef<Set<string>>(new Set());
 
-  // Audio for notifications
-  const [audio] = useState(() => {
-    if (typeof window !== "undefined") {
-      const a = new Audio();
-      a.src = "https://server-v2.kepket.uz/mixkit-positive-notification-951.wav";
-      return a;
+  // Track previous items count to detect new items
+  const prevItemsCountRef = useRef<number>(0);
+
+  // Audio ref - professional approach
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const audioUnlockedRef = useRef(false);
+
+  // Initialize audio on mount
+  useEffect(() => {
+    if (typeof window !== "undefined" && !audioRef.current) {
+      audioRef.current = new Audio("/mixkit-positive-notification-951.wav");
+      audioRef.current.preload = "auto";
+      console.log("🔊 Audio initialized");
     }
-    return null;
-  });
+  }, []);
+
+  // Function to play notification sound
+  const playNotificationSound = useCallback(() => {
+    const audio = audioRef.current;
+    if (!audio || !soundEnabled) {
+      console.log("🔊 Sound skipped - audio:", !!audio, "enabled:", soundEnabled);
+      return;
+    }
+
+    console.log("🔊 Attempting to play sound...");
+    audio.currentTime = 0;
+    audio.volume = 1;
+
+    const playPromise = audio.play();
+    if (playPromise !== undefined) {
+      playPromise
+        .then(() => {
+          console.log("🔊 ✅ Sound played successfully!");
+          audioUnlockedRef.current = true;
+        })
+        .catch((error) => {
+          console.log("🔊 ❌ Sound play failed:", error.message);
+          // If blocked by autoplay policy, we need user interaction
+          if (error.name === "NotAllowedError") {
+            console.log("🔊 Audio blocked - need user interaction first");
+          }
+        });
+    }
+  }, [soundEnabled]);
 
   // Simple debug useEffect - bu ishlayaptimi?
   useEffect(() => {
-    console.log(">>> SIMPLE USEEFFECT WORKS <<<");
-    console.log(">>> user?.restaurantId:", user?.restaurantId);
-    console.log(">>> api.getToken():", api.getToken() ? "EXISTS" : "NULL");
+    // alert("useEffect ishladi! restaurantId: " + user?.restaurantId);
+    console.warn(">>> TEST USEEFFECT <<<");
+    console.warn(">>> user?.restaurantId:", user?.restaurantId);
+    console.warn(">>> api.getToken():", api.getToken() ? "EXISTS" : "NULL");
+
+    // Socket test
+    if (user?.restaurantId && api.getToken()) {
+      console.warn(">>> SOCKET SHOULD CONNECT NOW <<<");
+    }
   }, [user?.restaurantId]);
 
   // Request notification permission on page load
@@ -105,6 +146,11 @@ export function Dashboard() {
 
     setSoundEnabled(newSoundEnabled);
     notificationService.setSoundEnabled(newSoundEnabled);
+
+    // Play test sound when enabling to unlock audio and confirm it works
+    if (newSoundEnabled) {
+      playNotificationSound();
+    }
   };
 
   // Auto-print function for new orders
@@ -183,29 +229,33 @@ export function Dashboard() {
     }
   }, [calculateStats, user]);
 
+  // Debug state for socket
+  const [socketDebug, setSocketDebug] = useState<string>("initializing...");
+
   // Socket connection
   useEffect(() => {
-    console.log("============ SOCKET EFFECT ============");
+    console.log("🔌 SOCKET EFFECT STARTED");
     console.log("user?.restaurantId:", user?.restaurantId);
+    setSocketDebug("effect started");
 
     const token = api.getToken();
     console.log("token:", token ? "EXISTS" : "NULL");
 
     if (!token || !user?.restaurantId) {
       console.log("SOCKET: SKIPPED (no token or restaurantId)");
+      setSocketDebug("skipped: no token/restaurantId");
       return;
     }
 
     console.log("SOCKET: CONNECTING...");
+    setSocketDebug("connecting...");
 
     const cookId = user.id || user._id;
 
-    console.log("========================================");
     console.log("=== SOCKET CONNECTING ===");
     console.log("API_URL:", API_URL);
     console.log("restaurantId:", user.restaurantId);
     console.log("cookId:", cookId);
-    console.log("========================================");
 
     const newSocket = io(API_URL, {
       auth: { token },
@@ -213,8 +263,9 @@ export function Dashboard() {
     });
 
     newSocket.on("connect", () => {
-      console.log("SOCKET: CONNECTED!");
+      console.log("✅ SOCKET: CONNECTED!");
       console.log("SOCKET: Emitting cook_connect with restaurantId:", user.restaurantId, "cookId:", cookId);
+      setSocketDebug("CONNECTED!");
       setIsConnected(true);
       // Join cook room with cookId for filtered orders
       newSocket.emit("cook_connect", {
@@ -224,11 +275,13 @@ export function Dashboard() {
     });
 
     newSocket.on("connect_error", (error) => {
-      console.error("SOCKET: CONNECTION ERROR:", error.message);
+      console.error("❌❌❌ SOCKET: CONNECTION ERROR:", error.message);
+      setSocketDebug("ERROR: " + error.message);
     });
 
     newSocket.on("disconnect", (reason) => {
-      console.log("SOCKET: DISCONNECTED:", reason);
+      console.warn("⚠️ SOCKET: DISCONNECTED:", reason);
+      setSocketDebug("disconnected: " + reason);
       setIsConnected(false);
     });
 
@@ -240,10 +293,15 @@ export function Dashboard() {
         allOrders: FoodItem[];
         isNewOrder: boolean;
         newItems?: Array<Record<string, unknown>>;
+        itemsAddedToExisting?: boolean;
       }) => {
-        console.log("======== NEW_KITCHEN_ORDER RECEIVED ========");
-        console.log("newItems count:", data.newItems?.length || 0);
-        console.log("newItems:", JSON.stringify(data.newItems, null, 2));
+        console.log("🍽️🍽️🍽️ NEW_KITCHEN_ORDER EVENT RECEIVED 🍽️🍽️🍽️");
+        console.log("Full data:", data);
+        console.log("isNewOrder:", data.isNewOrder);
+        console.log("itemsAddedToExisting:", data.itemsAddedToExisting);
+        console.log("newItems:", data.newItems);
+        console.log("newItems length:", data.newItems?.length);
+        setSocketDebug("ORDER RECEIVED!");
 
         // Defensive check: ensure allOrders is an array
         if (data.allOrders && Array.isArray(data.allOrders)) {
@@ -251,13 +309,26 @@ export function Dashboard() {
           calculateStats(data.allOrders);
         }
 
-        // Play sound and show push notification if newItems exists (new items added)
-        if (data.newItems && data.newItems.length > 0) {
+        // Play sound for ANY new_kitchen_order event (new order or items added)
+        // Either newItems exists OR isNewOrder is true OR itemsAddedToExisting is true
+        const shouldPlaySound =
+          (data.newItems && data.newItems.length > 0) ||
+          data.isNewOrder ||
+          data.itemsAddedToExisting;
+
+        console.log("🔔 Should play sound?", shouldPlaySound);
+
+        if (shouldPlaySound) {
           const orderInfo = data.order || (data.allOrders && data.allOrders.length > 0 ? data.allOrders[data.allOrders.length - 1] : null);
           const tableName = orderInfo?.tableName || "Yangi buyurtma";
 
-          // Show push notification and play sound
-          if (soundEnabled) {
+          console.log("🔔🔔🔔 PLAYING SOUND NOW! 🔔🔔🔔");
+
+          // Play notification sound
+          playNotificationSound();
+
+          // Show push notification
+          if (soundEnabled && data.newItems && data.newItems.length > 0) {
             notificationService.showNewOrderNotification(
               tableName,
               data.newItems.length,
@@ -268,7 +339,7 @@ export function Dashboard() {
 
         // Auto-print - yangi buyurtmalar uchun chek chiqarish
         const autoPrintEnabled = localStorage.getItem("autoPrint") !== "false";
-        console.log("AUTO-PRINT enabled:", autoPrintEnabled);
+        console.log("🖨️ AUTO-PRINT enabled:", autoPrintEnabled);
 
         // newItems mavjud bo'lsa printerga yuborish
         if (autoPrintEnabled && data.newItems && data.newItems.length > 0) {
@@ -276,7 +347,7 @@ export function Dashboard() {
           const tableName = orderInfo?.tableName || "Noma'lum stol";
           const waiterName = orderInfo?.waiterName || "";
 
-          console.log(">>> SENDING TO PRINTER <<<");
+          console.log("🖨️ SENDING TO PRINTER");
           console.log("Table:", tableName, "Waiter:", waiterName);
 
           // Print server ga yuborish (printer server o'zi tanlangan printerni ishlatadi)
@@ -285,20 +356,38 @@ export function Dashboard() {
             waiterName,
             data.newItems as Array<{ foodName?: string; name?: string; quantity?: number }>
           ).then((result: { success: boolean; error?: string }) => {
-            console.log(">>> PRINT RESULT:", result.success ? "SUCCESS" : "FAILED", result.error || "");
+            console.log("🖨️ PRINT RESULT:", result.success ? "✅ SUCCESS" : "❌ FAILED", result.error || "");
+            setSocketDebug("PRINT: " + (result.success ? "SUCCESS" : "FAILED"));
           }).catch((err: Error) => {
-            console.error(">>> PRINT ERROR:", err.message);
+            console.error("🖨️ PRINT ERROR:", err.message);
+            setSocketDebug("PRINT ERROR: " + err.message);
           });
         } else {
-          console.log("PRINT SKIPPED:", !autoPrintEnabled ? "disabled" : "no newItems");
+          console.log("🖨️ PRINT SKIPPED:", !autoPrintEnabled ? "disabled" : "no newItems");
         }
       },
     );
 
     // Listen for kitchen orders updated
     newSocket.on("kitchen_orders_updated", (orders: FoodItem[]) => {
+      console.log("📋 KITCHEN_ORDERS_UPDATED received, count:", orders?.length);
       // Defensive check: ensure orders is an array
       if (Array.isArray(orders)) {
+        // Count total pending items
+        const newPendingCount = orders.reduce((sum, order) => {
+          return sum + (order.items?.filter(i => i.kitchenStatus === 'pending').length || 0);
+        }, 0);
+
+        const prevCount = prevItemsCountRef.current;
+        console.log("📋 Pending items: prev=", prevCount, "new=", newPendingCount);
+
+        // If new pending items appeared, play sound
+        if (newPendingCount > prevCount && prevCount > 0) {
+          console.log("🔔🔔🔔 NEW ITEMS DETECTED via kitchen_orders_updated! 🔔🔔🔔");
+          playNotificationSound();
+        }
+
+        prevItemsCountRef.current = newPendingCount;
         setItems(orders);
         calculateStats(orders);
       } else {
@@ -324,6 +413,30 @@ export function Dashboard() {
       }
     });
 
+    // Order bekor qilinganda (admin panel tomonidan)
+    newSocket.on("order_cancelled", () => {
+      console.log("Order cancelled event received");
+      loadData();
+    });
+
+    // Order o'chirilganda
+    newSocket.on("order_deleted", () => {
+      console.log("Order deleted event received");
+      loadData();
+    });
+
+    // Order yangilanganda (item cancel, update, va boshqalar)
+    newSocket.on("order_updated", (data: { order?: FoodItem; action?: string }) => {
+      console.log("Order updated event received:", data.action);
+      loadData();
+    });
+
+    // Item bekor qilinganda (alohida event)
+    newSocket.on("order_item_cancelled", (data: { order?: FoodItem; action?: string }) => {
+      console.log("Order item cancelled event received:", data);
+      loadData();
+    });
+
     setSocket(newSocket);
 
     return () => {
@@ -333,11 +446,12 @@ export function Dashboard() {
     user?.restaurantId,
     user?.id,
     user?._id,
-    audio,
+    playNotificationSound,
     soundEnabled,
     calculateStats,
     autoPrintOrder,
     restaurant?.name,
+    loadData,
   ]);
 
   // Initial data load
@@ -451,6 +565,11 @@ export function Dashboard() {
         requireDoubleConfirmation={user?.doubleConfirmation}
       />
 
+      {/* Debug Info - Socket Status */}
+      <div className="fixed top-2 left-2 bg-black/80 text-white text-xs px-2 py-1 rounded z-50 font-mono">
+        Socket: {socketDebug}
+      </div>
+
       {/* Sound & Notification Toggle */}
       <div className="fixed bottom-6 right-6 flex flex-col gap-2">
         {/* Notification Permission Status */}
@@ -489,6 +608,21 @@ export function Dashboard() {
             </>
           )}
           <span>{soundEnabled ? "Ovoz yoqilgan" : "Ovoz o'chirilgan"}</span>
+        </button>
+
+        {/* Test sound button */}
+        <button
+          onClick={() => {
+            console.log("🔊 TEST BUTTON CLICKED");
+            const testAudio = new Audio("/mixkit-positive-notification-951.wav");
+            testAudio.volume = 1;
+            testAudio.play()
+              .then(() => console.log("🔊 TEST: Audio played!"))
+              .catch(e => console.error("🔊 TEST ERROR:", e));
+          }}
+          className="px-4 py-3 rounded-xl text-sm font-medium bg-blue-500 text-white hover:bg-blue-600"
+        >
+          🔊 Test Ovoz
         </button>
       </div>
 
