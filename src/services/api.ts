@@ -131,7 +131,8 @@ class ApiService {
         readyQuantity: item.readyQuantity ?? (item.kitchenStatus === 'ready' ? item.quantity : 0),
         readyAt: item.readyAt,
         addedAt: item.addedAt || order.createdAt,
-        originalIndex: idx,
+        // Backend dan kelgan originalIndex ni ishlatish, aks holda local index
+        originalIndex: item.originalIndex !== undefined ? item.originalIndex : idx,
         kitchenStatus: item.kitchenStatus || 'pending',
       }));
 
