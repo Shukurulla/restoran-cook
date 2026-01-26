@@ -272,30 +272,47 @@ export const PrinterAPI = {
     items: Array<{ foodName?: string; name?: string; quantity?: number }>,
     printerName?: string
   ): Promise<PrintResult> {
+    console.log("=== PrinterAPI.printOrderDirect CALLED ===");
+    console.log("Input params:", { tableName, waiterName, itemsCount: items?.length, printerName });
+
     try {
       const selectedPrinter = printerName || getSelectedPrinter();
+      console.log("Selected printer:", selectedPrinter);
 
       if (!selectedPrinter) {
+        console.error("No printer selected!");
         return { success: false, error: 'Printer tanlanmagan. Sozlamalardan printer tanlang.' };
       }
+
+      const requestBody = {
+        printerName: selectedPrinter,
+        restaurantName: getRestaurantName(),
+        tableName: tableName,
+        waiterName: waiterName || '',
+        items: items.map(item => ({
+          foodName: item.foodName || item.name || 'Noma\'lum',
+          quantity: item.quantity || 1
+        })),
+        createdAt: new Date().toISOString()
+      };
+
+      console.log("=== SENDING TO PRINTER SERVER ===");
+      console.log("URL:", `${PRINT_SERVER_URL}/print/order`);
+      console.log("Request body:", JSON.stringify(requestBody, null, 2));
 
       const res = await fetch(`${PRINT_SERVER_URL}/print/order`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          printerName: selectedPrinter,
-          restaurantName: getRestaurantName(),
-          tableName: tableName,
-          waiterName: waiterName || '',
-          items: items.map(item => ({
-            foodName: item.foodName || item.name || 'Noma\'lum',
-            quantity: item.quantity || 1
-          })),
-          createdAt: new Date().toISOString()
-        })
+        body: JSON.stringify(requestBody)
       });
-      return await res.json();
+
+      const result = await res.json();
+      console.log("=== PRINTER SERVER RESPONSE ===");
+      console.log("Response:", result);
+
+      return result;
     } catch (error) {
+      console.error('=== PRINT ORDER DIRECT ERROR ===');
       console.error('Failed to print order direct:', error);
       return { success: false, error: 'Printer server bilan bog\'lanib bo\'lmadi' };
     }

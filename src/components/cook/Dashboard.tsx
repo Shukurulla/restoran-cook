@@ -261,11 +261,32 @@ export function Dashboard() {
 
         // Auto-print - yangi buyurtmalar uchun chek chiqarish
         const autoPrintEnabled = localStorage.getItem("autoPrint") !== "false";
+        const selectedPrinter = localStorage.getItem("selectedPrinter") || undefined;
+
+        console.log("=== AUTO-PRINT DEBUG ===");
+        console.log("autoPrintEnabled:", autoPrintEnabled);
+        console.log("selectedPrinter:", selectedPrinter);
+        console.log("data.newItems:", data.newItems);
+        console.log("data.newItems length:", data.newItems?.length);
+        console.log("data.isNewOrder:", data.isNewOrder);
+
         if (autoPrintEnabled && data.newItems && data.newItems.length > 0) {
-          const selectedPrinter = localStorage.getItem("selectedPrinter") || undefined;
           const orderInfo = data.order || (data.allOrders && data.allOrders.length > 0 ? data.allOrders[data.allOrders.length - 1] : null);
           const tableName = orderInfo?.tableName || "Noma'lum stol";
           const waiterName = orderInfo?.waiterName || "";
+
+          // Printerga yuboriladigan ma'lumotni log qilish
+          const printData = {
+            printerName: selectedPrinter,
+            tableName: tableName,
+            waiterName: waiterName,
+            items: (data.newItems as Array<{ foodName?: string; name?: string; quantity?: number }>).map(item => ({
+              foodName: item.foodName || item.name || 'Noma\'lum',
+              quantity: item.quantity || 1
+            }))
+          };
+          console.log("=== PRINTER DATA ===");
+          console.log("Print data:", JSON.stringify(printData, null, 2));
 
           // /print/order endpoint ga to'g'ridan-to'g'ri yuborish
           PrinterAPI.printOrderDirect(
@@ -274,6 +295,8 @@ export function Dashboard() {
             data.newItems as Array<{ foodName?: string; name?: string; quantity?: number }>,
             selectedPrinter
           ).then((result: { success: boolean; error?: string }) => {
+            console.log("=== PRINT RESULT ===");
+            console.log("Print result:", result);
             if (result.success) {
               console.log('Order printed successfully');
             } else {
@@ -282,6 +305,9 @@ export function Dashboard() {
           }).catch((err: Error) => {
             console.error('Print error:', err);
           });
+        } else {
+          console.log("=== PRINT SKIPPED ===");
+          console.log("Reason:", !autoPrintEnabled ? "Auto-print disabled" : !data.newItems ? "No newItems" : "newItems is empty");
         }
       },
     );
