@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { FoodItem, OrderItem, TabType } from '@/types';
-import { ItemCard } from './ItemCard';
+import { FoodItem, TabType } from '@/types';
+import { OrderCard } from './OrderCard';
 import { BiArchive } from 'react-icons/bi';
 
 interface FoodItemsListProps {
@@ -11,74 +11,74 @@ interface FoodItemsListProps {
   onRevertReady: (order: FoodItem, itemIndex: number, revertCount: number) => void;
   removingItem: string | null;
   isLoading: boolean;
-  requireDoubleConfirmation?: boolean; // Oshpaz profilidan
+  requireDoubleConfirmation?: boolean;
 }
 
-// Flat item structure for display
-interface FlatItem {
-  order: FoodItem;
-  item: OrderItem;
-  itemIndex: number;
-}
-
-export function FoodItemsList({ items, onMarkReady, onRevertReady, removingItem, isLoading, requireDoubleConfirmation }: FoodItemsListProps) {
+export function FoodItemsList({
+  items,
+  onMarkReady,
+  onRevertReady,
+  removingItem,
+  isLoading,
+  requireDoubleConfirmation,
+}: FoodItemsListProps) {
   const [tab, setTab] = useState<TabType>('new');
 
-  // Flatten all items from all orders
-  const flatItems = useMemo(() => {
-    const result: FlatItem[] = [];
+  // Orderlarni filterlash - har bir order o'z itemlari bilan
+  const { pendingOrders, servedOrders, cancelledOrders } = useMemo(() => {
+    const pending: FoodItem[] = [];
+    const served: FoodItem[] = [];
+    const cancelled: FoodItem[] = [];
+
     items.forEach(order => {
-      order.items.forEach((item, index) => {
-        // Use originalIndex if available (from filtered cook orders), otherwise use array index
-        const actualIndex = item.originalIndex !== undefined ? item.originalIndex : index;
-        result.push({
-          order,
-          item,
-          itemIndex: actualIndex,
-        });
+      if (order.status === 'cancelled') {
+        cancelled.push(order);
+        return;
+      }
+
+      if (order.status === 'served') {
+        served.push(order);
+        return;
+      }
+
+      // Barcha orderlarni pending tabda ko'rsatamiz
+      pending.push({
+        ...order,
+        items: order.items,
       });
     });
-    // Sort by order createdAt (oldest first)
-    return result.sort((a, b) =>
-      new Date(a.order.createdAt).getTime() - new Date(b.order.createdAt).getTime()
-    );
+
+    // Vaqt bo'yicha saralash - eng eski birinchi
+    pending.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+    served.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+    return { pendingOrders: pending, servedOrders: served, cancelledOrders: cancelled };
   }, [items]);
 
-  // Filter items based on ready status
-  // Qisman tayyor bo'lgan itemlar ham tayyorlanmoqda tabida ko'rinadi
-  // Served orderlarni exclude qilish kerak
-  const pendingItems = flatItems.filter(f => {
-    if (f.order.status === 'served') return false; // Served bo'lsa exclude
-    const readyQty = f.item.readyQuantity || 0;
-    const remaining = f.item.quantity - readyQty;
-    return remaining > 0; // Qolgan miqdor bor bo'lsa - hali tayyor emas
-  });
-  const readyItems = flatItems.filter(f => {
-    if (f.order.status === 'served') return false; // Served bo'lsa exclude
-    const readyQty = f.item.readyQuantity || 0;
-    return readyQty >= f.item.quantity; // Hammasi tayyor
-  });
-  const cancelledOrders = items.filter(order => order.status === 'cancelled');
+  // Pending itemlar soni (har bir orderdagi pending itemlar)
+  const pendingItemsCount = pendingOrders.reduce((sum, order) => {
+    return sum + order.items.filter(item => {
+      const readyQty = item.readyQuantity || 0;
+      return item.quantity - readyQty > 0;
+    }).length;
+  }, 0);
 
-  // Served items - waiter tomonidan yetkazilgan
-  const servedItems = flatItems.filter(f => f.order.status === 'served');
+  // Served itemlar soni
+  const servedItemsCount = servedOrders.reduce((sum, order) => sum + order.items.length, 0);
 
-  const filteredItems = tab === 'new'
-    ? pendingItems
-    : tab === 'ready'
-      ? readyItems
-      : tab === 'served'
-        ? servedItems
-        : [];
+  const filteredOrders = tab === 'new'
+    ? pendingOrders
+    : tab === 'served'
+      ? servedOrders
+      : cancelledOrders;
 
   const tabs = [
-    { key: 'new' as TabType, label: 'Tayyorlanmoqda', count: pendingItems.length, color: 'text-[#f97316]' },
-    { key: 'ready' as TabType, label: 'Tayyor', count: readyItems.length, color: 'text-[#22c55e]' },
-    { key: 'served' as TabType, label: 'Tugatilganlar', count: servedItems.length, color: 'text-[#3b82f6]' },
-    { key: 'cancelled' as TabType, label: 'Rad etilgan', count: cancelledOrders.length, color: 'text-[#ef4444]' },
+    { key: 'new' as TabType, label: 'Tayyorlanmoqda', count: pendingItemsCount, orderCount: pendingOrders.length, color: 'text-[#f97316]' },
+    { key: 'served' as TabType, label: 'Tugatilganlar', count: servedItemsCount, orderCount: servedOrders.length, color: 'text-[#3b82f6]' },
+    { key: 'cancelled' as TabType, label: 'Rad etilgan', count: cancelledOrders.length, orderCount: cancelledOrders.length, color: 'text-[#ef4444]' },
   ];
 
-  const isEmpty = tab === 'cancelled' ? cancelledOrders.length === 0 : filteredItems.length === 0;
+  const isEmpty = filteredOrders.length === 0;
 
   return (
     <div>
@@ -111,37 +111,29 @@ export function FoodItemsList({ items, onMarkReady, onRevertReady, removingItem,
             <BiArchive />
           </div>
           <h3 className="text-lg font-semibold mb-2">
-            {tab === 'new' && 'Tayyorlanayotgan taom yo\'q'}
-            {tab === 'ready' && 'Tayyor taomlar yo\'q'}
-            {tab === 'served' && 'Tugatilgan taomlar yo\'q'}
-            {tab === 'cancelled' && 'Rad etilgan taomlar yo\'q'}
+            {tab === 'new' && 'Tayyorlanayotgan buyurtma yo\'q'}
+            {tab === 'served' && 'Tugatilgan buyurtmalar yo\'q'}
+            {tab === 'cancelled' && 'Rad etilgan buyurtmalar yo\'q'}
           </h3>
           <p className="text-[#71717a] text-sm">
             {tab === 'new' && 'Yangi buyurtmalar kelganda bu yerda ko\'rinadi'}
-            {tab === 'ready' && 'Tayyor qilingan taomlar bu yerda ko\'rinadi'}
-            {tab === 'served' && 'Yetkazib berilgan taomlar bu yerda ko\'rinadi'}
-            {tab === 'cancelled' && 'Rad etilgan taomlar bu yerda ko\'rinadi'}
+            {tab === 'served' && 'Yetkazib berilgan buyurtmalar bu yerda ko\'rinadi'}
+            {tab === 'cancelled' && 'Rad etilgan buyurtmalar bu yerda ko\'rinadi'}
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {filteredItems.map((flatItem, index) => {
-            const itemKey = `${flatItem.order._id}-${flatItem.itemIndex}`;
-            const isRemoving = removingItem === itemKey;
-            return (
-              <ItemCard
-                key={`${flatItem.order._id}-${flatItem.itemIndex}-${index}`}
-                order={flatItem.order}
-                item={flatItem.item}
-                itemIndex={flatItem.itemIndex}
-                onMarkReady={onMarkReady}
-                onRevertReady={onRevertReady}
-                isRemoving={isRemoving}
-                isLoading={isLoading}
-                requireDoubleConfirmation={requireDoubleConfirmation}
-              />
-            );
-          })}
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          {filteredOrders.map((order) => (
+            <OrderCard
+              key={order._id}
+              order={order}
+              onMarkReady={onMarkReady}
+              onRevertReady={onRevertReady}
+              removingItem={removingItem}
+              isLoading={isLoading}
+              requireDoubleConfirmation={requireDoubleConfirmation}
+            />
+          ))}
         </div>
       )}
     </div>
