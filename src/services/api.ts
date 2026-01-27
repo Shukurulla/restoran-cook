@@ -2,7 +2,7 @@ import { User, Restaurant, FoodItem, OrderItem, Shift } from "@/types";
 
 // Yangi backend v2 URL
 const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL || "https://server-v2.kepket.uz";
+  process.env.NEXT_PUBLIC_API_URL || "http://localhost:3010";
 
 class ApiService {
   private token: string | null = null;
@@ -104,10 +104,15 @@ class ApiService {
     restaurantId: string,
     cookId?: string,
     status?: "preparing" | "ready" | "all",
+    shiftId?: string,
   ): Promise<FoodItem[]> {
     const params = new URLSearchParams();
     if (status && status !== 'all') {
       params.append("status", status);
+    }
+    // ShiftId bo'yicha filter - yangi smena ochilganda faqat shu smenadagi orderlarni olish
+    if (shiftId) {
+      params.append("shiftId", shiftId);
     }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -172,24 +177,27 @@ class ApiService {
   async getPreparingItems(
     restaurantId: string,
     cookId?: string,
+    shiftId?: string,
   ): Promise<FoodItem[]> {
-    return this.getFoodItems(restaurantId, cookId, "preparing");
+    return this.getFoodItems(restaurantId, cookId, "preparing", shiftId);
   }
 
   // Tayyor (ready) itemlarni olish
   async getReadyItems(
     restaurantId: string,
     cookId?: string,
+    shiftId?: string,
   ): Promise<FoodItem[]> {
-    return this.getFoodItems(restaurantId, cookId, "ready");
+    return this.getFoodItems(restaurantId, cookId, "ready", shiftId);
   }
 
   // Barcha itemlarni olish (preparing + ready)
   async getAllItems(
     restaurantId: string,
     cookId?: string,
+    shiftId?: string,
   ): Promise<FoodItem[]> {
-    return this.getFoodItems(restaurantId, cookId, "all");
+    return this.getFoodItems(restaurantId, cookId, "all", shiftId);
   }
 
   // ========== KITCHEN ITEM STATUS ==========

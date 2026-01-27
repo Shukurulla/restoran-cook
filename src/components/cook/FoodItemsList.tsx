@@ -139,7 +139,7 @@ export function FoodItemsList({
               <span className={`px-2 py-0.5 rounded text-[11px] min-w-[24px] text-center font-semibold
                 ${tab === t.key ? `bg-[#262626] ${t.color}` : 'bg-[#262626] text-muted-foreground'}`}
               >
-                {t.count}
+                {t.orderCount}
               </span>
             </button>
           ))}
