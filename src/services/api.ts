@@ -260,6 +260,25 @@ class ApiService {
     return { data: allItems, updatedOrder };
   }
 
+  // Tayyorlashni boshlash (start item)
+  async startItem(
+    orderId: string,
+    itemIndex: number,
+  ): Promise<{ data: FoodItem[] }> {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await this.request<any>(
+      `/api/kitchen/orders/${orderId}/items/${itemIndex}/start`,
+      {
+        method: "POST",
+      },
+    );
+
+    const restaurant = this.getStoredRestaurant();
+    const allItems = await this.getFoodItems(restaurant?.id || restaurant?._id || '');
+
+    return { data: allItems };
+  }
+
   // Waiter ga xabar berish
   async notifyWaiter(orderId: string): Promise<FoodItem> {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
