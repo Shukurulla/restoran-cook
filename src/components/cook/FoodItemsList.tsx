@@ -216,7 +216,7 @@ export function FoodItemsList({
 
       {/* Stollar - katakcha ko'rinishda */}
       {tabTables.length > 1 && (
-        <div className="flex items-center gap-2 mb-4 overflow-x-auto scrollbar-hide pb-1" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+        <div className="flex items-center gap-2 mb-4 flex-wrap">
           <BiTable className="text-lg text-muted-foreground shrink-0" />
           <button
             onClick={() => setSelectedTable(null)}
