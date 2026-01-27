@@ -2,7 +2,7 @@ import { User, Restaurant, FoodItem, OrderItem, Shift } from "@/types";
 
 // Yangi backend v2 URL
 const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL || "http://localhost:3010";
+  process.env.NEXT_PUBLIC_API_URL || "https://server-v2.kepket.uz";
 
 class ApiService {
   private token: string | null = null;
