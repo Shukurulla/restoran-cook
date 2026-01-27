@@ -3,7 +3,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { FoodItem, TabType } from '@/types';
 import { OrderCard } from './OrderCard';
-import { BiArchive, BiChevronLeft, BiChevronRight } from 'react-icons/bi';
+import { BiArchive, BiChevronLeft, BiChevronRight, BiTable } from 'react-icons/bi';
 
 const ITEMS_PER_PAGE = 10;
 
@@ -30,6 +30,7 @@ export function FoodItemsList({
 }: FoodItemsListProps) {
   const [tab, setTab] = useState<TabType>('new');
   const [currentPage, setCurrentPage] = useState(1);
+  const [selectedTable, setSelectedTable] = useState<string | null>(null);
 
   // Orderlarni filterlash - har bir order o'z itemlari bilan
   const { preparingOrders, completedOrders, cancelledOrders } = useMemo(() => {
@@ -87,16 +88,42 @@ export function FoodItemsList({
   // Tugatilgan itemlar soni
   const completedItemsCount = completedOrders.reduce((sum, order) => sum + order.items.length, 0);
 
-  const filteredOrders = tab === 'new'
+  const tabOrders = tab === 'new'
     ? preparingOrders
     : tab === 'served'
       ? completedOrders
       : cancelledOrders;
 
-  // Tab o'zgarganda sahifani 1-ga qaytarish
+  // Hozirgi tabdagi stollar ro'yxati (unikal)
+  const tabTables = useMemo(() => {
+    const tableMap = new Map<string, { tableId: string; tableName: string; count: number }>();
+    tabOrders.forEach(order => {
+      const key = order.tableId;
+      if (tableMap.has(key)) {
+        tableMap.get(key)!.count++;
+      } else {
+        tableMap.set(key, { tableId: key, tableName: order.tableName, count: 1 });
+      }
+    });
+    // Stol nomi bo'yicha saralash
+    return Array.from(tableMap.values()).sort((a, b) => a.tableName.localeCompare(b.tableName, undefined, { numeric: true }));
+  }, [tabOrders]);
+
+  // Stol bo'yicha filterlangan orderlar
+  const filteredOrders = selectedTable
+    ? tabOrders.filter(order => order.tableId === selectedTable)
+    : tabOrders;
+
+  // Tab o'zgarganda sahifani 1-ga qaytarish va stol filterini tozalash
   useEffect(() => {
     setCurrentPage(1);
+    setSelectedTable(null);
   }, [tab]);
+
+  // Stol o'zgarganda sahifani 1-ga qaytarish
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [selectedTable]);
 
   // Pagination hisoblash
   const totalPages = Math.ceil(filteredOrders.length / ITEMS_PER_PAGE);
@@ -122,7 +149,7 @@ export function FoodItemsList({
   return (
     <div>
       {/* Tabs va Pagination - space-between */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-4">
         {/* Tabs */}
         <div className="flex gap-1 bg-secondary p-1 rounded-lg w-fit">
           {tabs.map((t) => (
@@ -186,6 +213,36 @@ export function FoodItemsList({
           </div>
         )}
       </div>
+
+      {/* Stollar - katakcha ko'rinishda */}
+      {tabTables.length > 1 && (
+        <div className="flex items-center gap-2 mb-4 overflow-x-auto scrollbar-hide pb-1" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+          <BiTable className="text-lg text-muted-foreground shrink-0" />
+          <button
+            onClick={() => setSelectedTable(null)}
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all border shrink-0 whitespace-nowrap
+              ${!selectedTable
+                ? 'bg-[#3b82f6] text-white border-[#3b82f6]'
+                : 'bg-secondary text-muted-foreground border-border hover:text-foreground hover:border-[#3b82f6]/50'
+              }`}
+          >
+            Barchasi ({tabOrders.length})
+          </button>
+          {tabTables.map((table) => (
+            <button
+              key={table.tableId}
+              onClick={() => setSelectedTable(selectedTable === table.tableId ? null : table.tableId)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all border shrink-0 whitespace-nowrap
+                ${selectedTable === table.tableId
+                  ? 'bg-[#f97316] text-white border-[#f97316]'
+                  : 'bg-secondary text-muted-foreground border-border hover:text-foreground hover:border-[#f97316]/50'
+                }`}
+            >
+              {table.tableName} ({table.count})
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Content */}
       {isEmpty ? (
