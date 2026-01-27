@@ -94,23 +94,23 @@ export function FoodItemsList({
       ? completedOrders
       : cancelledOrders;
 
-  // Barcha orderlardan stollar ro'yxati (unikal) - tab o'zgarganda ham bir xil bo'lishi uchun
+  // Barcha orderlardan stollar ro'yxati (unikal) - tableName bo'yicha guruhlash
   const allTables = useMemo(() => {
-    const tableMap = new Map<string, { tableId: string; tableName: string; count: number }>();
+    const tableMap = new Map<string, { tableName: string; count: number }>();
     items.forEach(order => {
-      const key = order.tableId;
+      const key = order.tableName;
       if (tableMap.has(key)) {
         tableMap.get(key)!.count++;
       } else {
-        tableMap.set(key, { tableId: key, tableName: order.tableName, count: 1 });
+        tableMap.set(key, { tableName: key, count: 1 });
       }
     });
     return Array.from(tableMap.values()).sort((a, b) => a.tableName.localeCompare(b.tableName, undefined, { numeric: true }));
   }, [items]);
 
-  // Stol bo'yicha filterlangan orderlar
+  // Stol bo'yicha filterlangan orderlar (tableName bo'yicha)
   const filteredOrders = selectedTable
-    ? tabOrders.filter(order => order.tableId === selectedTable)
+    ? tabOrders.filter(order => order.tableName === selectedTable)
     : tabOrders;
 
   // Tab o'zgarganda sahifani 1-ga qaytarish
@@ -228,10 +228,10 @@ export function FoodItemsList({
           </button>
           {allTables.map((table) => (
             <button
-              key={table.tableId}
-              onClick={() => setSelectedTable(selectedTable === table.tableId ? null : table.tableId)}
+              key={table.tableName}
+              onClick={() => setSelectedTable(selectedTable === table.tableName ? null : table.tableName)}
               className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all border shrink-0 whitespace-nowrap
-                ${selectedTable === table.tableId
+                ${selectedTable === table.tableName
                   ? 'bg-[#f97316] text-white border-[#f97316]'
                   : 'bg-secondary text-muted-foreground border-border hover:text-foreground hover:border-[#f97316]/50'
                 }`}
