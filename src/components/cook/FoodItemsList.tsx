@@ -145,9 +145,13 @@ export function FoodItemsList({
           ))}
         </div>
 
-        {/* Pagination */}
-        {totalPages > 1 && (
+        {/* Pagination - always show when there are orders */}
+        {filteredOrders.length > 0 && (
           <div className="flex items-center gap-3">
+            {/* Orders count */}
+            <div className="px-4 py-2.5 bg-secondary rounded-lg text-sm text-muted-foreground">
+              {filteredOrders.length} ta buyurtma
+            </div>
             <button
               onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
               disabled={currentPage === 1}
