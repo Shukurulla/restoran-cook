@@ -104,6 +104,7 @@ export function ItemCard({ order, item, itemIndex, onMarkReady, onRevertReady, o
     return () => clearInterval(interval);
   }, [isStartedFromBackend, item.startedAt]);
 
+  const isCancelled = item.isCancelled || item.kitchenStatus === 'cancelled';
   const isFullyReady = remainingQuantity <= 0;
 
   const handleDecrease = () => {
@@ -190,13 +191,15 @@ export function ItemCard({ order, item, itemIndex, onMarkReady, onRevertReady, o
 
   return (
     <div className={`rounded-xl border overflow-hidden transition-all hover:border-[#404040]
-      ${waitingConfirmation
-        ? 'bg-[#ef4444]/10 border-[#ef4444] border-2 shadow-[0_0_20px_rgba(239,68,68,0.3)]'
-        : isStartedFromBackend
-          ? 'bg-[#f97316]/10 border-[#f97316]/50'
-          : isFullyReady
-            ? 'bg-secondary border-[#22c55e]/30'
-            : 'bg-secondary border-border'}
+      ${isCancelled
+        ? 'bg-[#ef4444]/10 border-[#ef4444]/50 opacity-70'
+        : waitingConfirmation
+          ? 'bg-[#ef4444]/10 border-[#ef4444] border-2 shadow-[0_0_20px_rgba(239,68,68,0.3)]'
+          : isStartedFromBackend
+            ? 'bg-[#f97316]/10 border-[#f97316]/50'
+            : isFullyReady
+              ? 'bg-secondary border-[#22c55e]/30'
+              : 'bg-secondary border-border'}
       ${isRemoving ? 'opacity-50 scale-95 pointer-events-none' : 'opacity-100 scale-100'}`}
       style={{ transition: 'all 0.3s ease-out' }}
     >
@@ -206,13 +209,15 @@ export function ItemCard({ order, item, itemIndex, onMarkReady, onRevertReady, o
           <div className="flex items-center gap-3">
             {/* Miqdor badge - tayyor bo'lganda umumiy sonni, aks holda qolganini ko'rsatish */}
             <span className={`px-3 py-1 rounded-lg text-lg font-bold ${
-              isFullyReady
-                ? 'bg-[#22c55e]/20 text-[#22c55e]'
-                : 'bg-[#f97316] text-white'
+              isCancelled
+                ? 'bg-[#ef4444]/20 text-[#ef4444]'
+                : isFullyReady
+                  ? 'bg-[#22c55e]/20 text-[#22c55e]'
+                  : 'bg-[#f97316] text-white'
             }`}>
               {isFullyReady ? item.quantity : remainingQuantity}x
             </span>
-            <h3 className={`text-lg font-semibold ${isFullyReady ? 'text-[#22c55e]' : ''}`}>
+            <h3 className={`text-lg font-semibold ${isCancelled ? 'text-[#ef4444] line-through' : isFullyReady ? 'text-[#22c55e]' : ''}`}>
               {item.foodName}
             </h3>
           </div>
@@ -240,8 +245,15 @@ export function ItemCard({ order, item, itemIndex, onMarkReady, onRevertReady, o
           </div>
         </div>
 
-        {/* +/- UI - tayyor bo'lmaganda */}
-        {!isFullyReady && (
+        {/* Bekor qilingan badge */}
+        {isCancelled && (
+          <div className="mt-2 py-2 px-3 bg-[#ef4444]/15 rounded-lg text-center">
+            <span className="text-[#ef4444] font-semibold text-sm">Bekor qilingan</span>
+          </div>
+        )}
+
+        {/* +/- UI - tayyor bo'lmaganda va bekor qilinmagan */}
+        {!isFullyReady && !isCancelled && (
           <>
             {/* Boshlandi tugmasi - faqat hali boshlanmagan bo'lsa (backend dan) */}
             {!isStartedFromBackend && (
