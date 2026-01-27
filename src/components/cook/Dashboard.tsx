@@ -458,6 +458,12 @@ export function Dashboard() {
       loadData();
     });
 
+    // Order to'langanda - tugatilganlar tabida qolishi uchun
+    newSocket.on("order_paid", () => {
+      console.log("Order paid event received");
+      loadData();
+    });
+
     setSocket(newSocket);
 
     return () => {

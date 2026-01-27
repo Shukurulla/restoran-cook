@@ -59,7 +59,7 @@ export interface FoodItem {
   waiterId?: string;
   waiterName?: string;
   items: OrderItem[];
-  status: 'pending' | 'preparing' | 'ready' | 'served' | 'cancelled';
+  status: 'pending' | 'preparing' | 'ready' | 'served' | 'paid' | 'cancelled';
   allItemsReady: boolean;
   notifiedWaiter?: boolean;
   notifiedAt?: string;

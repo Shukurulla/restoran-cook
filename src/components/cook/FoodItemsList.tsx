@@ -62,7 +62,7 @@ export function FoodItemsList({
       }
 
       // Barcha itemlar tayyor bo'lsa - tugatilganlar
-      if (order.status === 'served' || order.status === 'ready' || allItemsReady) {
+      if (order.status === 'served' || order.status === 'ready' || order.status === 'paid' || allItemsReady) {
         completed.push(order);
         return;
       }
