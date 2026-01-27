@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { FoodItem, OrderItem } from '@/types';
-import { BiTable, BiUser, BiTime, BiCheck, BiMinus, BiPlus, BiSend, BiCheckDouble, BiUndo, BiError, BiPlay } from 'react-icons/bi';
+import { BiTable, BiUser, BiTime, BiCheck, BiMinus, BiPlus, BiSend, BiCheckDouble, BiUndo, BiError, BiPlay, BiStopwatch } from 'react-icons/bi';
 
 interface ItemCardProps {
   order: FoodItem;
@@ -10,11 +10,13 @@ interface ItemCardProps {
   itemIndex: number;
   onMarkReady: (order: FoodItem, itemIndex: number, readyCount?: number) => void;
   onRevertReady: (order: FoodItem, itemIndex: number, revertCount: number) => void;
+  onStartItem?: (order: FoodItem, itemIndex: number) => Promise<void>; // Yangi - Boshlandi callback
   isRemoving?: boolean;
   isLoading?: boolean;
   requireDoubleConfirmation?: boolean; // Oshpaz profilidan - ikki marta tasdiqlash
 }
 
+// Vaqt farqini hisoblash (qo'shilgan vaqtdan beri)
 const getTimeDiff = (dateStr: string | undefined | null): string => {
   if (!dateStr) return 'Noma\'lum';
 
@@ -36,16 +38,36 @@ const getTimeDiff = (dateStr: string | undefined | null): string => {
   return `${hours} soat ${remainingMinutes} daqiqa oldin`;
 };
 
-export function ItemCard({ order, item, itemIndex, onMarkReady, onRevertReady, isRemoving, isLoading, requireDoubleConfirmation }: ItemCardProps) {
+// Tayyorlash vaqtini formatlash (timer uchun)
+const formatPreparationTime = (startedAt: string | undefined): string => {
+  if (!startedAt) return '00:00';
+
+  const start = new Date(startedAt);
+  if (isNaN(start.getTime())) return '00:00';
+
+  const diff = Date.now() - start.getTime();
+  if (diff < 0) return '00:00';
+
+  const totalSeconds = Math.floor(diff / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+
+  return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+};
+
+export function ItemCard({ order, item, itemIndex, onMarkReady, onRevertReady, onStartItem, isRemoving, isLoading, requireDoubleConfirmation }: ItemCardProps) {
   // Qolgan miqdor (umumiy - tayyor qilingan)
   const alreadyReady = item.readyQuantity || 0;
   const remainingQuantity = item.quantity - alreadyReady;
 
-  // Local state - boshlangan yoki yo'qligini ko'rsatish (faqat visual)
-  const [isStarted, setIsStarted] = useState(false);
+  // Backend dan kelgan isStarted holatini ishlatish
+  const isStartedFromBackend = item.isStarted || false;
 
   // Local state - 1 dan boshlab ko'paytirib boradi
   const [pendingCount, setPendingCount] = useState(1);
+
+  // Local state - boshlash jarayonida
+  const [isStarting, setIsStarting] = useState(false);
 
   // Ikki marta tasdiqlash uchun - tasdiqlash kutilmoqda
   const [waitingConfirmation, setWaitingConfirmation] = useState(false);
@@ -58,18 +80,29 @@ export function ItemCard({ order, item, itemIndex, onMarkReady, onRevertReady, i
   // Vaqt ko'rsatkichi - dinamik yangilanadi
   const [timeDiff, setTimeDiff] = useState<string>('');
 
-  // Har 30 sekundda vaqtni yangilash va props o'zgarganda
+  // Tayyorlash vaqti timer - har sekundda yangilanadi
+  const [preparationTime, setPreparationTime] = useState<string>('00:00');
+
+  // Har 30 sekundda qo'shilgan vaqtni yangilash
   useEffect(() => {
-    // Debug: requireDoubleConfirmation qiymatini ko'rish
-    console.log('Double confirmation debug:', {
-      foodName: item.foodName,
-      requireDoubleConfirmation: requireDoubleConfirmation,
-    });
     const updateTime = () => setTimeDiff(getTimeDiff(timeSource));
-    updateTime(); // Darhol yangilash
-    const interval = setInterval(updateTime, 30000); // Har 30 sekundda
+    updateTime();
+    const interval = setInterval(updateTime, 30000);
     return () => clearInterval(interval);
   }, [timeSource, item.foodId, item.foodName, order.createdAt, item.addedAt]);
+
+  // Tayyorlash timeri - har sekundda yangilanadi (faqat boshlangan bo'lsa)
+  useEffect(() => {
+    if (!isStartedFromBackend || !item.startedAt) {
+      setPreparationTime('00:00');
+      return;
+    }
+
+    const updatePrepTime = () => setPreparationTime(formatPreparationTime(item.startedAt));
+    updatePrepTime();
+    const interval = setInterval(updatePrepTime, 1000); // Har sekundda
+    return () => clearInterval(interval);
+  }, [isStartedFromBackend, item.startedAt]);
 
   const isFullyReady = remainingQuantity <= 0;
 
@@ -139,16 +172,27 @@ export function ItemCard({ order, item, itemIndex, onMarkReady, onRevertReady, i
     onRevertReady(order, itemIndex, item.quantity); // Hammasini qaytarish
   };
 
-  // Tayyorlashni boshlash - faqat local state (visual)
-  const handleStart = () => {
-    setIsStarted(true);
-  };
+  // Tayyorlashni boshlash - backend API ga yuborish
+  const handleStart = useCallback(async () => {
+    if (isStarting || isLoading) return;
+
+    setIsStarting(true);
+    try {
+      if (onStartItem) {
+        await onStartItem(order, itemIndex);
+      }
+    } catch (error) {
+      console.error('Start item error:', error);
+    } finally {
+      setIsStarting(false);
+    }
+  }, [order, itemIndex, onStartItem, isStarting, isLoading]);
 
   return (
     <div className={`rounded-xl border overflow-hidden transition-all hover:border-[#404040]
       ${waitingConfirmation
         ? 'bg-[#ef4444]/10 border-[#ef4444] border-2 shadow-[0_0_20px_rgba(239,68,68,0.3)]'
-        : isStarted
+        : isStartedFromBackend
           ? 'bg-[#f97316]/10 border-[#f97316]/50'
           : isFullyReady
             ? 'bg-secondary border-[#22c55e]/30'
@@ -174,6 +218,13 @@ export function ItemCard({ order, item, itemIndex, onMarkReady, onRevertReady, i
           </div>
 
           <div className="flex items-center gap-2">
+            {/* Tayyorlash vaqti timer - faqat boshlangan bo'lsa */}
+            {isStartedFromBackend && !isFullyReady && (
+              <span className="py-1 px-3 bg-[#f97316]/20 text-[#f97316] rounded-lg text-sm font-bold flex items-center gap-1.5 animate-pulse">
+                <BiStopwatch className="text-base" />
+                {preparationTime}
+              </span>
+            )}
             {/* Ikki tasdiqlash badge */}
             {requireDoubleConfirmation && !isFullyReady && (
               <span className="py-1 px-2 bg-[#f97316]/15 text-[#f97316] rounded-lg text-xs font-medium">
@@ -192,14 +243,27 @@ export function ItemCard({ order, item, itemIndex, onMarkReady, onRevertReady, i
         {/* +/- UI - tayyor bo'lmaganda */}
         {!isFullyReady && (
           <>
-            {/* Boshlandi tugmasi - faqat hali boshlanmagan bo'lsa */}
-            {!isStarted && (
+            {/* Boshlandi tugmasi - faqat hali boshlanmagan bo'lsa (backend dan) */}
+            {!isStartedFromBackend && (
               <button
                 onClick={handleStart}
-                className="w-full h-14 mb-2 px-4 rounded-xl text-white text-base font-semibold flex items-center justify-center gap-2 transition-all active:scale-[0.98] bg-[#f97316] hover:bg-[#ea580c]"
+                disabled={isStarting || isLoading}
+                className={`w-full h-14 mb-2 px-4 rounded-xl text-white text-base font-semibold flex items-center justify-center gap-2 transition-all active:scale-[0.98]
+                  ${isStarting || isLoading
+                    ? 'bg-[#f97316]/50 cursor-not-allowed'
+                    : 'bg-[#f97316] hover:bg-[#ea580c]'}`}
               >
-                <BiPlay className="text-xl" />
-                Boshlandi
+                {isStarting ? (
+                  <>
+                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    Boshlanmoqda...
+                  </>
+                ) : (
+                  <>
+                    <BiPlay className="text-xl" />
+                    Tayyorlashni boshlash
+                  </>
+                )}
               </button>
             )}
 

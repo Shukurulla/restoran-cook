@@ -15,10 +15,10 @@ export function Header({ stats, isConnected, activeShift, onSettingsClick }: Hea
   const { user, restaurant } = useAuth();
 
   return (
-    <header className="flex justify-between items-center py-4 mb-6 border-b border-border">
+    <header className="flex justify-between items-center py-4 mb-6 px-6 -mx-6 -mt-6 bg-black">
       <div className="flex items-center gap-4">
         <img src="/logo.png" alt="Kepket" className="w-[100px] h-auto" />
-        <h1 className="text-xl font-semibold tracking-tight">Oshxona Panel</h1>
+        <h1 className="text-xl font-semibold tracking-tight text-white">Oshxona Panel</h1>
         {restaurant && (
           <span className="px-4 py-1.5 bg-secondary rounded-full text-sm text-muted-foreground font-medium">
             {restaurant.name}

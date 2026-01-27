@@ -32,6 +32,16 @@ export interface OrderItem {
   originalIndex?: number;
   requireDoubleConfirmation?: boolean; // Ikki marta tasdiqlash kerak
   kitchenStatus?: 'pending' | 'preparing' | 'ready' | 'served' | 'cancelled'; // Backend status
+
+  // Tayyorlash boshlandi - oshpaz "Boshlandi" bosgan
+  isStarted?: boolean;
+  startedAt?: string;
+  startedBy?: string;
+  startedByName?: string;
+
+  // Tayyorlash davomiyligi (millisekundlarda)
+  preparationDuration?: number;
+
   // Cancelled item fields
   isCancelled?: boolean;
   cancelledAt?: string;

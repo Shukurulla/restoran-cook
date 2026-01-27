@@ -1,13 +1,32 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { FoodItem, OrderItem } from '@/types';
-import { BiTable, BiUser, BiTime, BiCheck, BiMinus, BiPlus, BiCheckDouble, BiUndo, BiError } from 'react-icons/bi';
+import { BiTable, BiUser, BiTime, BiCheck, BiUndo, BiError, BiPlay, BiStopwatch } from 'react-icons/bi';
+
+// Tayyorlash vaqtini formatlash (timer uchun)
+const formatPreparationTime = (startedAt: string | undefined): string => {
+  if (!startedAt) return '00:00';
+
+  const start = new Date(startedAt);
+  if (isNaN(start.getTime())) return '00:00';
+
+  const diff = Date.now() - start.getTime();
+  if (diff < 0) return '00:00';
+
+  const totalSeconds = Math.floor(diff / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+
+  return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+};
 
 interface OrderCardProps {
   order: FoodItem;
   onMarkReady: (order: FoodItem, itemIndex: number, readyCount?: number) => void;
   onRevertReady: (order: FoodItem, itemIndex: number, revertCount: number) => void;
+  onStartItem?: (order: FoodItem, itemIndex: number) => Promise<void>;
+  onMarkAllReady?: (order: FoodItem) => void;
   removingItem: string | null;
   isLoading: boolean;
   requireDoubleConfirmation?: boolean;
@@ -36,6 +55,7 @@ function ItemRow({
   itemIndex,
   onMarkReady,
   onRevertReady,
+  onStartItem,
   isRemoving,
   isLoading,
   requireDoubleConfirmation,
@@ -46,6 +66,7 @@ function ItemRow({
   itemIndex: number;
   onMarkReady: (order: FoodItem, itemIndex: number, readyCount?: number) => void;
   onRevertReady: (order: FoodItem, itemIndex: number, revertCount: number) => void;
+  onStartItem?: (order: FoodItem, itemIndex: number) => Promise<void>;
   isRemoving: boolean;
   isLoading: boolean;
   requireDoubleConfirmation?: boolean;
@@ -73,28 +94,41 @@ function ItemRow({
     );
   }
 
-  const [pendingCount, setPendingCount] = useState(1);
   const [waitingConfirmation, setWaitingConfirmation] = useState(false);
-  const [expanded, setExpanded] = useState(false);
+  const [isStarting, setIsStarting] = useState(false);
+  const [preparationTime, setPreparationTime] = useState('00:00');
 
-  const handleDecrease = () => {
-    if (pendingCount > 1) setPendingCount(prev => prev - 1);
-  };
+  // Backend dan kelgan isStarted holatini ishlatish
+  const isStartedFromBackend = item.isStarted || false;
 
-  const handleIncrease = () => {
-    if (pendingCount < remainingQuantity) setPendingCount(prev => prev + 1);
-  };
-
-  const handleSubmit = () => {
-    if (requireDoubleConfirmation && !waitingConfirmation) {
-      setWaitingConfirmation(true);
+  // Tayyorlash timeri - har sekundda yangilanadi (faqat boshlangan bo'lsa)
+  useEffect(() => {
+    if (!isStartedFromBackend || !item.startedAt) {
+      setPreparationTime('00:00');
       return;
     }
-    onMarkReady(order, itemIndex, pendingCount);
-    setPendingCount(1);
-    setWaitingConfirmation(false);
-    setExpanded(false);
-  };
+
+    const updatePrepTime = () => setPreparationTime(formatPreparationTime(item.startedAt));
+    updatePrepTime();
+    const interval = setInterval(updatePrepTime, 1000);
+    return () => clearInterval(interval);
+  }, [isStartedFromBackend, item.startedAt]);
+
+  // Tayyorlashni boshlash
+  const handleStart = useCallback(async () => {
+    if (isStarting || isLoading) return;
+
+    setIsStarting(true);
+    try {
+      if (onStartItem) {
+        await onStartItem(order, itemIndex);
+      }
+    } catch (error) {
+      console.error('Start item error:', error);
+    } finally {
+      setIsStarting(false);
+    }
+  }, [order, itemIndex, onStartItem, isStarting, isLoading]);
 
   const handleAllReady = () => {
     if (requireDoubleConfirmation && !waitingConfirmation) {
@@ -102,9 +136,7 @@ function ItemRow({
       return;
     }
     onMarkReady(order, itemIndex, remainingQuantity);
-    setPendingCount(1);
     setWaitingConfirmation(false);
-    setExpanded(false);
   };
 
   const handleRevert = () => {
@@ -137,20 +169,29 @@ function ItemRow({
     <div className={`rounded-lg border transition-all ${
       waitingConfirmation
         ? 'bg-[#ef4444]/10 border-[#ef4444]'
-        : expanded
-          ? 'bg-[#1a1a1a] border-[#404040]'
+        : isStartedFromBackend
+          ? 'bg-[#f97316]/10 border-[#f97316]/50'
           : 'bg-[#1a1a1a] border-[#333]'
     } ${isRemoving ? 'opacity-50' : ''}`}>
-      {/* Main row - always visible */}
+      {/* Main row - bosganda tayyor bo'ladi */}
       <div
-        className="flex items-center justify-between py-2.5 px-3 cursor-pointer"
-        onClick={() => !waitingConfirmation && setExpanded(!expanded)}
+        className="flex items-center justify-between py-2.5 px-3 cursor-pointer hover:bg-[#22c55e]/10 transition-colors"
+        onClick={() => !waitingConfirmation && handleAllReady()}
       >
         <div className="flex items-center gap-2">
-          <span className="px-2 py-0.5 rounded bg-[#f97316] text-white text-sm font-bold">
+          <span className={`px-2 py-0.5 rounded text-white text-sm font-bold ${
+            isStartedFromBackend ? 'bg-[#f97316]' : 'bg-[#f97316]'
+          }`}>
             {remainingQuantity}x
           </span>
           <span className="font-medium text-white">{item.foodName}</span>
+          {/* Timer - faqat boshlangan bo'lsa */}
+          {isStartedFromBackend && (
+            <span className="text-xs text-[#f97316] bg-[#f97316]/10 px-1.5 py-0.5 rounded flex items-center gap-1 font-mono font-bold">
+              <BiStopwatch className="text-sm" />
+              {preparationTime}
+            </span>
+          )}
           {alreadyReady > 0 && (
             <span className="text-xs text-[#22c55e] bg-[#22c55e]/10 px-1.5 py-0.5 rounded">
               +{alreadyReady} tayyor
@@ -159,11 +200,11 @@ function ItemRow({
         </div>
 
         {/* Quick actions */}
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
           {waitingConfirmation ? (
             <>
               <button
-                onClick={(e) => { e.stopPropagation(); handleAllReady(); }}
+                onClick={handleAllReady}
                 disabled={isLoading}
                 className="px-3 py-1.5 bg-[#ef4444] text-white text-sm font-semibold rounded-lg animate-pulse"
               >
@@ -171,59 +212,41 @@ function ItemRow({
                 Tasdiqlash
               </button>
               <button
-                onClick={(e) => { e.stopPropagation(); setWaitingConfirmation(false); }}
+                onClick={() => setWaitingConfirmation(false)}
                 className="p-1.5 text-[#888] hover:text-white"
               >
                 ✕
               </button>
             </>
           ) : (
-            <button
-              onClick={(e) => { e.stopPropagation(); handleAllReady(); }}
-              disabled={isLoading}
-              className="px-3 py-1.5 bg-[#22c55e] hover:bg-[#16a34a] text-white text-sm font-semibold rounded-lg transition-colors flex items-center gap-1"
-            >
-              <BiCheckDouble />
-              Tayyor
-            </button>
+            <>
+              {/* Boshlandi button - faqat timer uchun, hali boshlanmagan bo'lsa */}
+              {!isStartedFromBackend && (
+                <button
+                  onClick={handleStart}
+                  disabled={isLoading || isStarting}
+                  className={`px-4 py-1.5 text-white text-sm font-semibold rounded-lg transition-colors flex items-center gap-2 ${
+                    isStarting
+                      ? 'bg-[#f97316]/50 cursor-not-allowed'
+                      : 'bg-[#f97316] hover:bg-[#ea580c]'
+                  }`}
+                  title="Timer bilan tayyorlashni boshlash"
+                >
+                  {isStarting ? (
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  ) : (
+                    <>
+                      <BiPlay className="text-lg" />
+                      Boshlash
+                    </>
+                  )}
+                </button>
+              )}
+            </>
           )}
         </div>
       </div>
 
-      {/* Expanded controls - qisman tayyor qilish uchun */}
-      {expanded && !waitingConfirmation && remainingQuantity > 1 && (
-        <div className="px-3 pb-3 pt-1 border-t border-[#333]">
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-[#888]">Qisman:</span>
-            <button
-              onClick={handleDecrease}
-              disabled={pendingCount <= 1}
-              className={`w-8 h-8 rounded flex items-center justify-center text-lg ${
-                pendingCount <= 1 ? 'bg-[#262626] text-[#525252]' : 'bg-[#ef4444] text-white'
-              }`}
-            >
-              <BiMinus />
-            </button>
-            <span className="w-8 text-center font-bold text-white">{pendingCount}</span>
-            <button
-              onClick={handleIncrease}
-              disabled={pendingCount >= remainingQuantity}
-              className={`w-8 h-8 rounded flex items-center justify-center text-lg ${
-                pendingCount >= remainingQuantity ? 'bg-[#262626] text-[#525252]' : 'bg-[#22c55e] text-white'
-              }`}
-            >
-              <BiPlus />
-            </button>
-            <button
-              onClick={handleSubmit}
-              disabled={isLoading}
-              className="flex-1 h-8 bg-[#3b82f6] hover:bg-[#2563eb] text-white text-sm font-semibold rounded transition-colors"
-            >
-              {pendingCount}x yuborish
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
@@ -232,6 +255,8 @@ export function OrderCard({
   order,
   onMarkReady,
   onRevertReady,
+  onStartItem,
+  onMarkAllReady,
   removingItem,
   isLoading,
   requireDoubleConfirmation,
@@ -260,7 +285,11 @@ export function OrderCard({
     }`}>
       {/* Header */}
       <div className={`px-4 py-3 border-b flex items-center justify-between ${
-        isCancelled ? 'border-[#ef4444]/20' : allReady ? 'border-[#22c55e]/20' : 'border-border'
+        isCancelled
+          ? 'bg-[#ef4444]/10 border-[#ef4444]/20'
+          : allReady
+            ? 'bg-[#22c55e]/10 border-[#22c55e]/20'
+            : 'bg-[#262626] border-border'
       }`}>
         <div className="flex items-center gap-3">
           <div className={`w-10 h-10 rounded-lg flex items-center justify-center text-xl ${
@@ -316,6 +345,7 @@ export function OrderCard({
               itemIndex={actualIndex}
               onMarkReady={onMarkReady}
               onRevertReady={onRevertReady}
+              onStartItem={onStartItem}
               isRemoving={removingItem === itemKey}
               isLoading={isLoading}
               requireDoubleConfirmation={requireDoubleConfirmation}
@@ -323,6 +353,18 @@ export function OrderCard({
             />
           );
         })}
+
+        {/* Barchasi tayyor tugmasi - faqat tayyor bo'lmagan itemlar bo'lsa */}
+        {!allReady && !isCancelled && onMarkAllReady && (
+          <button
+            onClick={() => onMarkAllReady(order)}
+            disabled={isLoading}
+            className="w-full mt-2 py-2.5 bg-[#22c55e] hover:bg-[#16a34a] text-white text-sm font-semibold rounded-lg transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <BiCheck className="text-lg" />
+            Barchasi tayyor
+          </button>
+        )}
       </div>
     </div>
   );

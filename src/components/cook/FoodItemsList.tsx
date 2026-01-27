@@ -1,14 +1,18 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { FoodItem, TabType } from '@/types';
 import { OrderCard } from './OrderCard';
-import { BiArchive } from 'react-icons/bi';
+import { BiArchive, BiChevronLeft, BiChevronRight } from 'react-icons/bi';
+
+const ITEMS_PER_PAGE = 10;
 
 interface FoodItemsListProps {
   items: FoodItem[];
   onMarkReady: (order: FoodItem, itemIndex: number, readyCount?: number) => void;
   onRevertReady: (order: FoodItem, itemIndex: number, revertCount: number) => void;
+  onStartItem?: (order: FoodItem, itemIndex: number) => Promise<void>;
+  onMarkAllReady?: (order: FoodItem) => void;
   removingItem: string | null;
   isLoading: boolean;
   requireDoubleConfirmation?: boolean;
@@ -18,11 +22,14 @@ export function FoodItemsList({
   items,
   onMarkReady,
   onRevertReady,
+  onStartItem,
+  onMarkAllReady,
   removingItem,
   isLoading,
   requireDoubleConfirmation,
 }: FoodItemsListProps) {
   const [tab, setTab] = useState<TabType>('new');
+  const [currentPage, setCurrentPage] = useState(1);
 
   // Orderlarni filterlash - har bir order o'z itemlari bilan
   const { preparingOrders, completedOrders, cancelledOrders } = useMemo(() => {
@@ -86,6 +93,24 @@ export function FoodItemsList({
       ? completedOrders
       : cancelledOrders;
 
+  // Tab o'zgarganda sahifani 1-ga qaytarish
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [tab]);
+
+  // Pagination hisoblash
+  const totalPages = Math.ceil(filteredOrders.length / ITEMS_PER_PAGE);
+  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+  const endIndex = startIndex + ITEMS_PER_PAGE;
+  const paginatedOrders = filteredOrders.slice(startIndex, endIndex);
+
+  // Sahifa raqamini to'g'rilash (agar orderlar kamaysa)
+  useEffect(() => {
+    if (currentPage > totalPages && totalPages > 0) {
+      setCurrentPage(totalPages);
+    }
+  }, [totalPages, currentPage]);
+
   const tabs = [
     { key: 'new' as TabType, label: 'Tayyorlanmoqda', count: preparingItemsCount, orderCount: preparingOrders.length, color: 'text-[#f97316]' },
     { key: 'served' as TabType, label: 'Tugatilganlar', count: completedItemsCount, orderCount: completedOrders.length, color: 'text-[#22c55e]' },
@@ -96,26 +121,66 @@ export function FoodItemsList({
 
   return (
     <div>
-      {/* Tabs */}
-      <div className="flex gap-1 bg-secondary p-1 rounded-lg w-fit mb-6">
-        {tabs.map((t) => (
-          <button
-            key={t.key}
-            onClick={() => setTab(t.key)}
-            className={`px-5 py-2.5 rounded-md text-sm font-medium flex items-center gap-2 transition-all
-              ${tab === t.key
-                ? 'bg-background text-foreground shadow-sm'
-                : 'text-muted-foreground hover:text-foreground'
-              }`}
-          >
-            {t.label}
-            <span className={`px-2 py-0.5 rounded text-[11px] min-w-[24px] text-center font-semibold
-              ${tab === t.key ? `bg-[#262626] ${t.color}` : 'bg-[#262626] text-muted-foreground'}`}
+      {/* Tabs va Pagination - space-between */}
+      <div className="flex items-center justify-between mb-6">
+        {/* Tabs */}
+        <div className="flex gap-1 bg-secondary p-1 rounded-lg w-fit">
+          {tabs.map((t) => (
+            <button
+              key={t.key}
+              onClick={() => setTab(t.key)}
+              className={`px-5 py-2.5 rounded-md text-sm font-medium flex items-center gap-2 transition-all
+                ${tab === t.key
+                  ? 'bg-background text-foreground shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground'
+                }`}
             >
-              {t.count}
-            </span>
-          </button>
-        ))}
+              {t.label}
+              <span className={`px-2 py-0.5 rounded text-[11px] min-w-[24px] text-center font-semibold
+                ${tab === t.key ? `bg-[#262626] ${t.color}` : 'bg-[#262626] text-muted-foreground'}`}
+              >
+                {t.count}
+              </span>
+            </button>
+          ))}
+        </div>
+
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+              disabled={currentPage === 1}
+              className={`flex items-center justify-center gap-2 px-8 py-2.5 rounded-lg text-sm font-medium transition-all min-w-[140px]
+                ${currentPage === 1
+                  ? 'bg-secondary text-muted-foreground cursor-not-allowed opacity-50'
+                  : 'bg-secondary text-foreground hover:bg-[#262626]'
+                }`}
+            >
+              <BiChevronLeft className="text-xl" />
+              Oldingi
+            </button>
+
+            <div className="flex items-center gap-2 px-4 py-2.5 bg-secondary rounded-lg min-w-[100px] justify-center">
+              <span className="text-sm font-semibold text-foreground">{currentPage}</span>
+              <span className="text-muted-foreground text-sm">/</span>
+              <span className="text-sm text-muted-foreground">{totalPages}</span>
+            </div>
+
+            <button
+              onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+              disabled={currentPage === totalPages}
+              className={`flex items-center justify-center gap-2 px-8 py-2.5 rounded-lg text-sm font-medium transition-all min-w-[140px]
+                ${currentPage === totalPages
+                  ? 'bg-secondary text-muted-foreground cursor-not-allowed opacity-50'
+                  : 'bg-secondary text-foreground hover:bg-[#262626]'
+                }`}
+            >
+              Keyingi
+              <BiChevronRight className="text-xl" />
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Content */}
@@ -137,12 +202,14 @@ export function FoodItemsList({
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {filteredOrders.map((order) => (
+          {paginatedOrders.map((order) => (
             <OrderCard
               key={order._id}
               order={order}
               onMarkReady={onMarkReady}
               onRevertReady={onRevertReady}
+              onStartItem={onStartItem}
+              onMarkAllReady={onMarkAllReady}
               removingItem={removingItem}
               isLoading={isLoading}
               requireDoubleConfirmation={requireDoubleConfirmation}

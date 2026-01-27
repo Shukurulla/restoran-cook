@@ -486,14 +486,14 @@ export function Dashboard() {
           foodName,
         });
 
-        // 1 sekunddan keyin modalni yopish va state'ni yangilash
+        // 0.5 sekunddan keyin modalni yopish va state'ni yangilash
         setTimeout(() => {
           setNotification(prev => ({ ...prev, show: false }));
           setRemovingItem(null);
           setItems(allOrders);
           calculateStats(allOrders);
           setIsLoading(false);
-        }, 1000);
+        }, 500);
       } else {
         // Eski usul - to'liq tayyor/tayyor emas qilish
         const { data: allOrders } = await api.markItemReady(order._id, itemIndex);
@@ -535,11 +535,11 @@ export function Dashboard() {
         foodName,
       });
 
-      // 1 sekunddan keyin modalni yopish
+      // 0.5 sekunddan keyin modalni yopish
       setTimeout(() => {
         setNotification(prev => ({ ...prev, show: false }));
         setIsLoading(false);
-      }, 1000);
+      }, 500);
     } catch (error) {
       console.error("Failed to revert ready:", error);
       setIsLoading(false);
@@ -547,8 +547,61 @@ export function Dashboard() {
     }
   };
 
+  // Tayyorlashni boshlash - "Boshlandi" tugmasi bosilganda
+  const handleStartItem = async (order: FoodItem, itemIndex: number) => {
+    try {
+      const { data: allOrders } = await api.startItem(order._id, itemIndex);
+      setItems(allOrders);
+      calculateStats(allOrders);
+    } catch (error) {
+      console.error("Failed to start item:", error);
+      alert("Xatolik yuz berdi");
+    }
+  };
+
+  // Barcha itemlarni tayyor qilish - "Barchasi tayyor" tugmasi
+  const handleMarkAllReady = async (order: FoodItem) => {
+    if (isLoading) return;
+
+    try {
+      setIsLoading(true);
+
+      // Tayyor bo'lmagan itemlarni yig'ish
+      const promises: Promise<unknown>[] = [];
+
+      for (const item of order.items) {
+        // Bekor qilingan itemlarni o'tkazib yuborish
+        if (item.isCancelled || item.kitchenStatus === 'cancelled') continue;
+
+        const alreadyReady = item.readyQuantity || 0;
+        const remainingQuantity = item.quantity - alreadyReady;
+
+        // Faqat tayyor bo'lmagan itemlarni
+        if (remainingQuantity > 0) {
+          const actualIndex = item.originalIndex !== undefined ? item.originalIndex : order.items.indexOf(item);
+          // Promise'ni to'plamga qo'shish (await qilmasdan)
+          promises.push(api.markItemPartialReady(order._id, actualIndex, remainingQuantity, user?.id || user?._id));
+        }
+      }
+
+      // Barcha so'rovlarni parallel yuborish
+      await Promise.all(promises);
+
+      // Oxirgi holatni olish
+      const restaurant = api.getStoredRestaurant();
+      const allOrders = await api.getAllItems(restaurant?.id || restaurant?._id || '');
+      setItems(allOrders);
+      calculateStats(allOrders);
+      setIsLoading(false);
+    } catch (error) {
+      console.error("Failed to mark all ready:", error);
+      setIsLoading(false);
+      alert("Xatolik yuz berdi");
+    }
+  };
+
   return (
-    <div className="min-h-screen p-6 max-w-[1600px] mx-auto">
+    <div className="min-h-screen p-6 max-w-[1600px] mx-auto bg-[#000]">
       <Header
         stats={stats}
         isConnected={isConnected}
@@ -560,6 +613,8 @@ export function Dashboard() {
         items={items}
         onMarkReady={handleMarkReady}
         onRevertReady={handleRevertReady}
+        onStartItem={handleStartItem}
+        onMarkAllReady={handleMarkAllReady}
         removingItem={removingItem}
         isLoading={isLoading}
         requireDoubleConfirmation={user?.doubleConfirmation}
