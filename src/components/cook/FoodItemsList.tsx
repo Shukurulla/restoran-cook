@@ -94,10 +94,10 @@ export function FoodItemsList({
       ? completedOrders
       : cancelledOrders;
 
-  // Hozirgi tabdagi stollar ro'yxati (unikal)
-  const tabTables = useMemo(() => {
+  // Barcha orderlardan stollar ro'yxati (unikal) - tab o'zgarganda ham bir xil bo'lishi uchun
+  const allTables = useMemo(() => {
     const tableMap = new Map<string, { tableId: string; tableName: string; count: number }>();
-    tabOrders.forEach(order => {
+    items.forEach(order => {
       const key = order.tableId;
       if (tableMap.has(key)) {
         tableMap.get(key)!.count++;
@@ -105,19 +105,17 @@ export function FoodItemsList({
         tableMap.set(key, { tableId: key, tableName: order.tableName, count: 1 });
       }
     });
-    // Stol nomi bo'yicha saralash
     return Array.from(tableMap.values()).sort((a, b) => a.tableName.localeCompare(b.tableName, undefined, { numeric: true }));
-  }, [tabOrders]);
+  }, [items]);
 
   // Stol bo'yicha filterlangan orderlar
   const filteredOrders = selectedTable
     ? tabOrders.filter(order => order.tableId === selectedTable)
     : tabOrders;
 
-  // Tab o'zgarganda sahifani 1-ga qaytarish va stol filterini tozalash
+  // Tab o'zgarganda sahifani 1-ga qaytarish
   useEffect(() => {
     setCurrentPage(1);
-    setSelectedTable(null);
   }, [tab]);
 
   // Stol o'zgarganda sahifani 1-ga qaytarish
@@ -215,7 +213,7 @@ export function FoodItemsList({
       </div>
 
       {/* Stollar - katakcha ko'rinishda */}
-      {tabTables.length > 1 && (
+      {allTables.length > 1 && (
         <div className="flex items-center gap-2 mb-4 flex-wrap">
           <BiTable className="text-lg text-muted-foreground shrink-0" />
           <button
@@ -226,9 +224,9 @@ export function FoodItemsList({
                 : 'bg-secondary text-muted-foreground border-border hover:text-foreground hover:border-[#3b82f6]/50'
               }`}
           >
-            Barchasi ({tabOrders.length})
+            Barchasi ({items.length})
           </button>
-          {tabTables.map((table) => (
+          {allTables.map((table) => (
             <button
               key={table.tableId}
               onClick={() => setSelectedTable(selectedTable === table.tableId ? null : table.tableId)}
