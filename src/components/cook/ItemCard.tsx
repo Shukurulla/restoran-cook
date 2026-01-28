@@ -104,7 +104,7 @@ export function ItemCard({ order, item, itemIndex, onMarkReady, onRevertReady, o
     return () => clearInterval(interval);
   }, [isStartedFromBackend, item.startedAt]);
 
-  const isCancelled = item.isCancelled || item.kitchenStatus === 'cancelled';
+  const isCancelled = item.isCancelled || item.kitchenStatus === 'cancelled' || !!item.cancelledAt || !!item.cancelledBy;
   const isFullyReady = remainingQuantity <= 0;
 
   const handleDecrease = () => {

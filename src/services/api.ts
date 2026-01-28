@@ -146,10 +146,11 @@ class ApiService {
         startedByName: item.startedByName,
         preparationDuration: item.preparationDuration || 0,
         // Cancelled item fields
-        isCancelled: item.status === 'cancelled' || item.kitchenStatus === 'cancelled',
+        isCancelled: item.status === 'cancelled' || item.kitchenStatus === 'cancelled' || !!item.cancelledAt || !!item.cancelledBy,
         cancelledAt: item.cancelledAt,
         cancelledBy: item.cancelledBy,
         cancelReason: item.cancelReason,
+        cancelledByName: item.cancelledByName,
       }));
 
       return {

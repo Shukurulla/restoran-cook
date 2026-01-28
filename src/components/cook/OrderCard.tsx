@@ -77,7 +77,7 @@ function ItemRow({
   const isFullyReady = remainingQuantity <= 0;
 
   // Item-level yoki order-level bekor qilish tekshiruvi
-  const isItemCancelled = isCancelled || item.isCancelled || item.kitchenStatus === 'cancelled';
+  const isItemCancelled = isCancelled || item.isCancelled || item.kitchenStatus === 'cancelled' || !!item.cancelledAt || !!item.cancelledBy;
 
   // Bekor qilingan order/item uchun - faqat item ko'rsatish, button yo'q
   if (isItemCancelled) {

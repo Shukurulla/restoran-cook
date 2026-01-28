@@ -47,6 +47,7 @@ export interface OrderItem {
   cancelledAt?: string;
   cancelledBy?: string;
   cancelReason?: string;
+  cancelledByName?: string;
 }
 
 export interface FoodItem {
