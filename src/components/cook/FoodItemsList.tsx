@@ -45,35 +45,24 @@ export function FoodItemsList({
         return;
       }
 
-      // Bekor qilinmagan itemlarni olish
+      // Bekor qilinmagan (aktiv) itemlarni olish
       const activeItems = order.items.filter(item => !item.isCancelled && item.kitchenStatus !== 'cancelled');
 
-      // MUHIM: Hali tayyorlanmagan itemlar bormi tekshirish
-      // Agar birorta itemda qoldiq quantity bo'lsa - bu order tayyorlanmoqda tabida bo'lishi kerak
+      // Aktiv itemlar orasida hali tayyor bo'lmaganlari bormi?
       const hasPendingItems = activeItems.some(item => {
         const readyQty = item.readyQuantity || 0;
         const remainingQty = item.quantity - readyQty;
-        // Item tayyor emas agar qoldiq quantity bor bo'lsa (isReady yoki kitchenStatus ga qaramasdan)
         return remainingQty > 0;
       });
 
-      // Agar pending item bo'lsa - doim tayyorlanmoqda tabiga
-      if (hasPendingItems && activeItems.length > 0) {
+      // Agar aktiv itemlar orasida pending bo'lsa - tayyorlanmoqda tabiga
+      if (hasPendingItems) {
         preparing.push({ ...order, items: order.items });
         return;
       }
 
-      // Barcha itemlar tayyor bo'lsa YOKI order status tayyor/served/paid bo'lsa - tugatilganlar
-      if (order.status === 'served' || order.status === 'ready' || order.status === 'paid' || !hasPendingItems) {
-        completed.push(order);
-        return;
-      }
-
-      // Aks holda - tayyorlanmoqda
-      preparing.push({
-        ...order,
-        items: order.items,
-      });
+      // Barcha aktiv itemlar tayyor (yoki aktiv item yo'q) - tugatilganlar tabiga
+      completed.push(order);
     });
 
     // Vaqt bo'yicha saralash - eng eski birinchi
