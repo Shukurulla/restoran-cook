@@ -50,6 +50,11 @@ export function FoodItemsList({
 
       // Aktiv itemlar orasida hali tayyor bo'lmaganlari bormi?
       const hasPendingItems = activeItems.some(item => {
+        // Agar item tayyor deb belgilangan bo'lsa - pending emas
+        if (item.isReady || item.kitchenStatus === 'ready' || item.kitchenStatus === 'served') {
+          return false;
+        }
+        // Aks holda readyQuantity tekshiriladi
         const readyQty = item.readyQuantity || 0;
         const remainingQty = item.quantity - readyQty;
         return remainingQty > 0;
