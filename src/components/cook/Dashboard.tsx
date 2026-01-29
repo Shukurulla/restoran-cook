@@ -60,6 +60,12 @@ export function Dashboard() {
   // Track printed orders to avoid duplicates
   const printedOrdersRef = useRef<Set<string>>(new Set());
 
+  // Track printed item IDs to avoid duplicate prints
+  const printedItemsRef = useRef<Set<string>>(new Set());
+
+  // Track previous items for detecting NEW items (not just count)
+  const prevItemsRef = useRef<Map<string, Set<string>>>(new Map()); // orderId -> Set of itemIds
+
   // Track previous items count to detect new items
   const prevItemsCountRef = useRef<number>(0);
 
@@ -398,34 +404,80 @@ export function Dashboard() {
 
         console.log("📋 Pending items: oldingi=", prevCount, "yangi=", newPendingCount, "yangi item bormi:", hasNewItems);
 
+        // Haqiqiy yangi itemlarni topish (oldin chop etilmaganlar)
+        const trulyNewItems: Array<{ orderId: string; tableName: string; waiterName: string; item: { _id: string; foodName: string; quantity: number } }> = [];
+
+        orders.forEach(order => {
+          const pendingItems = order.items?.filter(i => i.kitchenStatus === 'pending') || [];
+          pendingItems.forEach((item, idx) => {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const itemId = (item as any)._id || `${idx}`;
+            const itemKey = `${order._id}-${itemId}-${item.foodName}-${item.quantity}`;
+            if (!printedItemsRef.current.has(itemKey)) {
+              trulyNewItems.push({
+                orderId: order._id,
+                tableName: order.tableName || "Noma'lum",
+                waiterName: order.waiterName || "",
+                item: {
+                  _id: itemId,
+                  foodName: item.foodName,
+                  quantity: item.quantity
+                }
+              });
+              // Mark as printed
+              printedItemsRef.current.add(itemKey);
+            }
+          });
+        });
+
+        console.log("📋 Haqiqiy yangi itemlar soni:", trulyNewItems.length);
+
         // If new pending items appeared, play sound and potentially print
-        if (hasNewItems) {
+        if (trulyNewItems.length > 0) {
           console.log("🔔 YANGI ITEM ANIQLANDI - ovoz chalinadi");
           playNotificationSound();
 
-          // Find the orders with new pending items
-          const ordersWithNewItems = orders.filter(order =>
-            order.items?.some(item => item.kitchenStatus === 'pending')
-          );
+          const autoPrintEnabled = localStorage.getItem("autoPrint") !== "false";
 
-          if (ordersWithNewItems.length > 0) {
-            const printData = {
-              type: "KITCHEN_ORDERS_UPDATED",
-              prevPendingCount: prevCount,
-              newPendingCount: newPendingCount,
-              ordersWithPendingItems: ordersWithNewItems.map(order => ({
-                tableName: order.tableName,
-                waiterName: order.waiterName,
-                pendingItems: order.items?.filter(i => i.kitchenStatus === 'pending').map(i => ({
-                  foodName: i.foodName,
-                  quantity: i.quantity
-                }))
-              })),
-              timestamp: new Date().toISOString()
-            };
+          // Group by order for printing
+          const orderGroups = new Map<string, { tableName: string; waiterName: string; items: Array<{ foodName: string; quantity: number }> }>();
+          trulyNewItems.forEach(({ orderId, tableName, waiterName, item }) => {
+            if (!orderGroups.has(orderId)) {
+              orderGroups.set(orderId, { tableName, waiterName, items: [] });
+            }
+            orderGroups.get(orderId)!.items.push({ foodName: item.foodName, quantity: item.quantity });
+          });
 
-            // 🖨️ LOG TO CONSOLE
-            logPrinterData("KITCHEN ORDERS YANGILANDI (yangi itemlar)", printData, false);
+          const printData = {
+            type: "KITCHEN_ORDERS_UPDATED",
+            prevPendingCount: prevCount,
+            newPendingCount: newPendingCount,
+            trulyNewItemsCount: trulyNewItems.length,
+            ordersWithNewItems: Array.from(orderGroups.entries()).map(([orderId, data]) => ({
+              orderId,
+              tableName: data.tableName,
+              waiterName: data.waiterName,
+              newItems: data.items
+            })),
+            timestamp: new Date().toISOString()
+          };
+
+          // 🖨️ LOG TO CONSOLE
+          logPrinterData("KITCHEN ORDERS YANGILANDI (yangi itemlar)", printData, autoPrintEnabled);
+
+          // Auto-print yangi itemlar uchun
+          if (autoPrintEnabled) {
+            orderGroups.forEach((data) => {
+              PrinterAPI.printOrderDirect(
+                data.tableName,
+                data.waiterName,
+                data.items
+              ).then((result: { success: boolean; error?: string }) => {
+                console.log("🖨️ KITCHEN_UPDATED PRINT:", data.tableName, result.success ? "✅" : "❌", result.error || "");
+              }).catch((err: Error) => {
+                console.error("🖨️ PRINT ERROR:", err.message);
+              });
+            });
           }
         }
 
