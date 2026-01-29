@@ -45,19 +45,25 @@ export function FoodItemsList({
         return;
       }
 
-      // Bekor qilinmagan (aktiv) itemlarni olish
-      const activeItems = order.items.filter(item => !item.isCancelled && item.kitchenStatus !== 'cancelled');
+      // OrderCard bilan bir xil mantiq - item cancelled mi?
+      const isItemCancelled = (item: typeof order.items[0]) => {
+        return item.isCancelled || item.kitchenStatus === 'cancelled' || !!item.cancelledAt || !!item.cancelledBy;
+      };
 
-      // Aktiv itemlar orasida hali tayyor bo'lmaganlari bormi?
-      const hasPendingItems = activeItems.some(item => {
-        // Agar item tayyor deb belgilangan bo'lsa - pending emas
-        if (item.isReady || item.kitchenStatus === 'ready' || item.kitchenStatus === 'served') {
-          return false;
-        }
-        // Aks holda readyQuantity tekshiriladi
-        const readyQty = item.readyQuantity || 0;
-        const remainingQty = item.quantity - readyQty;
-        return remainingQty > 0;
+      // OrderCard bilan bir xil mantiq - item fully ready mi?
+      const isItemFullyReady = (item: typeof order.items[0]) => {
+        const alreadyReady = item.readyQuantity || 0;
+        const remainingQuantity = item.quantity - alreadyReady;
+        return remainingQuantity <= 0;
+      };
+
+      // Tayyorlanishi kerak bo'lgan itemlar bormi?
+      // Item pending agar: bekor qilinmagan VA hali to'liq tayyor bo'lmagan
+      const hasPendingItems = order.items.some(item => {
+        // Bekor qilingan itemlarni o'tkazib yuborish
+        if (isItemCancelled(item)) return false;
+        // Tayyor bo'lmaganlarni pending deb hisoblash
+        return !isItemFullyReady(item);
       });
 
       // Agar aktiv itemlar orasida pending bo'lsa - tayyorlanmoqda tabiga
