@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
-import { FoodItem, TabType } from '@/types';
+import { FoodItem, TabType, OrderItem } from '@/types';
 import { OrderCard } from './OrderCard';
 import { BiArchive, BiChevronLeft, BiChevronRight, BiTable, BiFilter } from 'react-icons/bi';
 
@@ -33,11 +33,23 @@ export function FoodItemsList({
   const [selectedTable, setSelectedTable] = useState<string | null>(null);
   const [showTableFilter, setShowTableFilter] = useState(false);
 
-  // Orderlarni filterlash - har bir order o'z itemlari bilan
+  // Orderlarni filterlash - har bir item o'z addedAt vaqti bilan alohida card
   const { preparingOrders, completedOrders, cancelledOrders } = useMemo(() => {
     const preparing: FoodItem[] = [];
     const completed: FoodItem[] = [];
     const cancelled: FoodItem[] = [];
+
+    // OrderCard bilan bir xil mantiq - item cancelled mi?
+    const isItemCancelled = (item: OrderItem) => {
+      return item.isCancelled || item.kitchenStatus === 'cancelled' || !!item.cancelledAt || !!item.cancelledBy;
+    };
+
+    // OrderCard bilan bir xil mantiq - item fully ready mi?
+    const isItemFullyReady = (item: OrderItem) => {
+      const alreadyReady = item.readyQuantity || 0;
+      const remainingQuantity = item.quantity - alreadyReady;
+      return remainingQuantity <= 0;
+    };
 
     items.forEach(order => {
       if (order.status === 'cancelled') {
@@ -45,39 +57,46 @@ export function FoodItemsList({
         return;
       }
 
-      // OrderCard bilan bir xil mantiq - item cancelled mi?
-      const isItemCancelled = (item: typeof order.items[0]) => {
-        return item.isCancelled || item.kitchenStatus === 'cancelled' || !!item.cancelledAt || !!item.cancelledBy;
-      };
+      // Itemlarni addedAt vaqti bo'yicha guruhlash
+      const itemsByTime = new Map<string, typeof order.items>();
 
-      // OrderCard bilan bir xil mantiq - item fully ready mi?
-      const isItemFullyReady = (item: typeof order.items[0]) => {
-        const alreadyReady = item.readyQuantity || 0;
-        const remainingQuantity = item.quantity - alreadyReady;
-        return remainingQuantity <= 0;
-      };
-
-      // Tayyorlanishi kerak bo'lgan itemlar bormi?
-      // Item pending agar: bekor qilinmagan VA hali to'liq tayyor bo'lmagan
-      const hasPendingItems = order.items.some(item => {
-        // Bekor qilingan itemlarni o'tkazib yuborish
-        if (isItemCancelled(item)) return false;
-        // Tayyor bo'lmaganlarni pending deb hisoblash
-        return !isItemFullyReady(item);
+      order.items.forEach((item, index) => {
+        // addedAt yoki order.createdAt ishlatish
+        const timeKey = item.addedAt || order.createdAt;
+        if (!itemsByTime.has(timeKey)) {
+          itemsByTime.set(timeKey, []);
+        }
+        // originalIndex ni saqlab qo'yish
+        itemsByTime.get(timeKey)!.push({ ...item, originalIndex: index });
       });
 
-      // Agar aktiv itemlar orasida pending bo'lsa - tayyorlanmoqda tabiga
-      if (hasPendingItems) {
-        preparing.push({ ...order, items: order.items });
-        return;
-      }
+      // Har bir vaqt guruhi uchun alohida card yaratish
+      itemsByTime.forEach((groupItems, addedAt) => {
+        // Bu guruhda pending item bormi?
+        const hasPendingItems = groupItems.some(item => {
+          if (isItemCancelled(item)) return false;
+          return !isItemFullyReady(item);
+        });
 
-      // Barcha aktiv itemlar tayyor (yoki aktiv item yo'q) - tugatilganlar tabiga
-      completed.push(order);
+        // Virtual order yaratish - addedAt ni createdAt sifatida ishlatish
+        const virtualOrder: FoodItem = {
+          ...order,
+          _id: `${order._id}_${addedAt}`, // Unique ID
+          items: groupItems,
+          createdAt: addedAt, // Saralash uchun addedAt ishlatiladi
+        };
+
+        if (hasPendingItems) {
+          preparing.push(virtualOrder);
+        } else {
+          completed.push(virtualOrder);
+        }
+      });
     });
 
-    // Vaqt bo'yicha saralash - eng eski birinchi
+    // Vaqt bo'yicha saralash - eng eski birinchi (tayyorlanmoqda)
     preparing.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+    // Eng yangi birinchi (tugatilganlar)
     completed.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
     return { preparingOrders: preparing, completedOrders: completed, cancelledOrders: cancelled };
