@@ -10,17 +10,10 @@ import { FoodItem, Stats, Shift } from "@/types";
 import { Header } from "./Header";
 import { FoodItemsList } from "./FoodItemsList";
 import { SettingsModal } from "./SettingsModal";
-import { BiVolumeFull, BiCheck, BiUndo } from "react-icons/bi";
+import { BiVolumeFull } from "react-icons/bi";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://server-v2.kepket.uz";
 
-// Notification modal type
-interface NotificationModal {
-  show: boolean;
-  type: 'ready' | 'revert';
-  waiterName: string;
-  foodName: string;
-}
 
 export function Dashboard() {
   const { user, restaurant } = useAuth();
@@ -43,13 +36,6 @@ export function Dashboard() {
   // Modal states
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
-  // Notification modal - buyurtma jo'natilganda/qaytarilganda ko'rsatiladi
-  const [notification, setNotification] = useState<NotificationModal>({
-    show: false,
-    type: 'ready',
-    waiterName: '',
-    foodName: '',
-  });
 
   // Animatsiya uchun - qaysi item o'chirilmoqda
   const [removingItem, setRemovingItem] = useState<string | null>(null);
@@ -678,47 +664,32 @@ export function Dashboard() {
     try {
       setIsLoading(true);
       const cookId = user?.id || user?._id;
-      const item = order.items[itemIndex];
-      const foodName = item?.foodName || 'Taom';
-      const waiterName = order.waiterName || 'Ofitsiant';
-
-      // Animatsiyani boshlash
-      const itemKey = `${order._id}-${itemIndex}`;
-      setRemovingItem(itemKey);
 
       if (readyCount !== undefined) {
-        // Qisman tayyor qilish - API orqali
-        const { data: allOrders } = await api.markItemPartialReady(order._id, itemIndex, readyCount, cookId);
-
-        // Modal ko'rsatish
-        setNotification({
-          show: true,
-          type: 'ready',
-          waiterName,
-          foodName,
-        });
-
-        // 0.5 sekunddan keyin modalni yopish va state'ni yangilash
-        setTimeout(() => {
-          setNotification(prev => ({ ...prev, show: false }));
-          setRemovingItem(null);
-          setItems(allOrders);
-          calculateStats(allOrders);
-          setIsLoading(false);
-        }, 500);
+        // Qisman tayyor qilish - API orqali (kutmasdan)
+        api.markItemPartialReady(order._id, itemIndex, readyCount, cookId)
+          .then(({ data: allOrders }) => {
+            setItems(allOrders);
+            calculateStats(allOrders);
+          })
+          .catch(err => console.error("Mark ready error:", err));
       } else {
         // Eski usul - to'liq tayyor/tayyor emas qilish
-        const { data: allOrders } = await api.markItemReady(order._id, itemIndex);
-        setItems(allOrders);
-        calculateStats(allOrders);
-        setRemovingItem(null);
-        setIsLoading(false);
+        api.markItemReady(order._id, itemIndex)
+          .then(({ data: allOrders }) => {
+            setItems(allOrders);
+            calculateStats(allOrders);
+          })
+          .catch(err => console.error("Mark ready error:", err));
       }
+
+      // Darhol loading ni to'xtatish - foydalanuvchi kutmaydi
+      setRemovingItem(null);
+      setIsLoading(false);
     } catch (error) {
       console.error("Failed to mark ready:", error);
       setRemovingItem(null);
       setIsLoading(false);
-      alert("Xatolik yuz berdi");
     }
   };
 
@@ -729,33 +700,20 @@ export function Dashboard() {
     try {
       setIsLoading(true);
       const cookId = user?.id || user?._id;
-      const item = order.items[itemIndex];
-      const foodName = item?.foodName || 'Taom';
 
-      // Revert uchun animatsiya kerak emas - darhol yangilash
-      const { data: allOrders } = await api.revertItemReady(order._id, itemIndex, revertCount, cookId);
+      // Revert - kutmasdan background da bajarish
+      api.revertItemReady(order._id, itemIndex, revertCount, cookId)
+        .then(({ data: allOrders }) => {
+          setItems(allOrders);
+          calculateStats(allOrders);
+        })
+        .catch(err => console.error("Revert ready error:", err));
 
-      // Darhol ma'lumotlarni yangilash (animatsiyasiz)
-      setItems(allOrders);
-      calculateStats(allOrders);
-
-      // Modal ko'rsatish
-      setNotification({
-        show: true,
-        type: 'revert',
-        waiterName: '',
-        foodName,
-      });
-
-      // 0.5 sekunddan keyin modalni yopish
-      setTimeout(() => {
-        setNotification(prev => ({ ...prev, show: false }));
-        setIsLoading(false);
-      }, 500);
+      // Darhol loading ni to'xtatish - foydalanuvchi kutmaydi
+      setIsLoading(false);
     } catch (error) {
       console.error("Failed to revert ready:", error);
       setIsLoading(false);
-      alert("Xatolik yuz berdi");
     }
   };
 
@@ -863,38 +821,6 @@ export function Dashboard() {
         onClose={() => setIsSettingsOpen(false)}
       />
 
-      {/* Notification Modal - buyurtma jo'natilganda/qaytarilganda */}
-      {notification.show && (
-        <div className="fixed inset-0 flex items-center justify-center z-50 pointer-events-none">
-          <div className={`px-8 py-6 rounded-2xl shadow-2xl transform transition-all duration-300 animate-in zoom-in-95 fade-in
-            ${notification.type === 'ready'
-              ? 'bg-[#22c55e] text-white'
-              : 'bg-[#f97316] text-white'
-            }`}
-          >
-            <div className="flex flex-col items-center gap-3">
-              {notification.type === 'ready' ? (
-                <BiCheck className="text-5xl" />
-              ) : (
-                <BiUndo className="text-5xl" />
-              )}
-              <div className="text-center">
-                <p className="text-xl font-bold mb-1">
-                  {notification.type === 'ready'
-                    ? `${notification.foodName} tayyor!`
-                    : `${notification.foodName} qaytarildi`
-                  }
-                </p>
-                {notification.type === 'ready' && notification.waiterName && (
-                  <p className="text-white/90">
-                    {notification.waiterName} ga jo&apos;natildi
-                  </p>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
