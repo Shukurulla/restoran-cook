@@ -10,7 +10,7 @@ import { FoodItem, Stats, Shift } from "@/types";
 import { Header } from "./Header";
 import { FoodItemsList } from "./FoodItemsList";
 import { SettingsModal } from "./SettingsModal";
-import { BiVolumeFull, BiVolumeMute, BiCheck, BiUndo, BiBell, BiBellOff } from "react-icons/bi";
+import { BiVolumeFull, BiCheck, BiUndo } from "react-icons/bi";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://server-v2.kepket.uz";
 
@@ -38,14 +38,10 @@ export function Dashboard() {
   });
   const [isConnected, setIsConnected] = useState(false);
   const [socket, setSocket] = useState<Socket | null>(null);
-  const [soundEnabled, setSoundEnabled] = useState(true);
   const [activeShift, setActiveShift] = useState<Shift | null>(null);
 
   // Modal states
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-
-  // Push notification permission state
-  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>("default");
 
   // Notification modal - buyurtma jo'natilganda/qaytarilganda ko'rsatiladi
   const [notification, setNotification] = useState<NotificationModal>({
@@ -71,20 +67,29 @@ export function Dashboard() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const audioUnlockedRef = useRef(false);
 
-  // Initialize audio on mount
+  // Initialize audio on mount - tanlangan ringtoneni ishlatish
   useEffect(() => {
-    if (typeof window !== "undefined" && !audioRef.current) {
-      audioRef.current = new Audio("/mixkit-positive-notification-951.wav");
+    if (typeof window !== "undefined") {
+      const selectedRingtone = localStorage.getItem("selectedRingtone") || "/mixkit-positive-notification-951.wav";
+      audioRef.current = new Audio(selectedRingtone);
       audioRef.current.preload = "auto";
-      console.log("🔊 Audio initialized");
+      console.log("🔊 Audio initialized with:", selectedRingtone);
     }
   }, []);
 
-  // Function to play notification sound
+  // Function to play notification sound (ovoz doim yoqilgan)
   const playNotificationSound = useCallback(() => {
+    // Tanlangan ringtoneni olish
+    const selectedRingtone = localStorage.getItem("selectedRingtone") || "/mixkit-positive-notification-951.wav";
+
+    // Agar ringtone o'zgargan bo'lsa, yangi audio yaratish
+    if (audioRef.current?.src !== window.location.origin + selectedRingtone) {
+      audioRef.current = new Audio(selectedRingtone);
+    }
+
     const audio = audioRef.current;
-    if (!audio || !soundEnabled) {
-      console.log("🔊 Sound skipped - audio:", !!audio, "enabled:", soundEnabled);
+    if (!audio) {
+      console.log("🔊 Sound skipped - no audio element");
       return;
     }
 
@@ -101,22 +106,19 @@ export function Dashboard() {
         })
         .catch((error) => {
           console.log("🔊 ❌ Sound play failed:", error.message);
-          // If blocked by autoplay policy, we need user interaction
           if (error.name === "NotAllowedError") {
             console.log("🔊 Audio blocked - need user interaction first");
           }
         });
     }
-  }, [soundEnabled]);
+  }, []);
 
-  // Simple debug useEffect - bu ishlayaptimi?
+  // Simple debug useEffect
   useEffect(() => {
-    // alert("useEffect ishladi! restaurantId: " + user?.restaurantId);
     console.warn(">>> TEST USEEFFECT <<<");
     console.warn(">>> user?.restaurantId:", user?.restaurantId);
     console.warn(">>> api.getToken():", api.getToken() ? "EXISTS" : "NULL");
 
-    // Socket test
     if (user?.restaurantId && api.getToken()) {
       console.warn(">>> SOCKET SHOULD CONNECT NOW <<<");
     }
@@ -127,31 +129,11 @@ export function Dashboard() {
     const requestNotificationPermission = async () => {
       if (notificationService.isSupported()) {
         const permission = await notificationService.requestPermission();
-        setNotificationPermission(permission);
         console.log("Notification permission:", permission);
       }
     };
     requestNotificationPermission();
   }, []);
-
-  // Handle sound toggle with permission request
-  const handleSoundToggle = async () => {
-    const newSoundEnabled = !soundEnabled;
-
-    // Request notification permission when enabling sound
-    if (newSoundEnabled && notificationService.getPermission() === "default") {
-      const permission = await notificationService.requestPermission();
-      setNotificationPermission(permission);
-    }
-
-    setSoundEnabled(newSoundEnabled);
-    notificationService.setSoundEnabled(newSoundEnabled);
-
-    // Play test sound when enabling to unlock audio and confirm it works
-    if (newSoundEnabled) {
-      playNotificationSound();
-    }
-  };
 
   // Auto-print function for new orders
   const autoPrintOrder = useCallback(async (order: FoodItem) => {
@@ -339,7 +321,7 @@ export function Dashboard() {
           playNotificationSound();
 
           // Show push notification
-          if (soundEnabled && data.newItems && data.newItems.length > 0) {
+          if (data.newItems && data.newItems.length > 0) {
             notificationService.showNewOrderNotification(
               tableName,
               data.newItems.length,
@@ -474,7 +456,6 @@ export function Dashboard() {
     user?.id,
     user?._id,
     playNotificationSound,
-    soundEnabled,
     calculateStats,
     autoPrintOrder,
     restaurant?.name,
@@ -652,59 +633,23 @@ export function Dashboard() {
         Socket: {socketDebug}
       </div>
 
-      {/* Sound & Notification Toggle */}
-      <div className="fixed bottom-6 right-6 flex flex-col gap-2">
-        {/* Notification Permission Status */}
-        {notificationPermission !== "granted" && (
-          <button
-            onClick={async () => {
-              const permission = await notificationService.requestPermission();
-              setNotificationPermission(permission);
-            }}
-            className="flex items-center gap-2 px-4 py-3 rounded-xl text-sm font-medium transition-colors bg-[#f97316]/10 border border-[#f97316]/30 text-[#f97316]"
-          >
-            <BiBell className="text-lg" />
-            <span>Bildirishnomaga ruxsat bering</span>
-          </button>
-        )}
-
-        {/* Sound Toggle */}
-        <button
-          onClick={handleSoundToggle}
-          className={`flex items-center gap-2 px-4 py-3 rounded-xl text-sm font-medium transition-colors
-            ${
-              soundEnabled
-                ? "bg-[#22c55e]/10 border border-[#22c55e]/30 text-[#22c55e]"
-                : "bg-secondary border border-border text-muted-foreground"
-            }`}
-        >
-          {soundEnabled ? (
-            <>
-              <BiVolumeFull className="text-lg" />
-              <BiBell className="text-lg" />
-            </>
-          ) : (
-            <>
-              <BiVolumeMute className="text-lg" />
-              <BiBellOff className="text-lg" />
-            </>
-          )}
-          <span>{soundEnabled ? "Ovoz yoqilgan" : "Ovoz o'chirilgan"}</span>
-        </button>
-
-        {/* Test sound button */}
+      {/* Test Sound Button */}
+      <div className="fixed bottom-6 right-6">
         <button
           onClick={() => {
             console.log("🔊 TEST BUTTON CLICKED");
-            const testAudio = new Audio("/mixkit-positive-notification-951.wav");
+            // Tanlangan ringtoneni ishlatish
+            const selectedRingtone = localStorage.getItem("selectedRingtone") || "/mixkit-positive-notification-951.wav";
+            const testAudio = new Audio(selectedRingtone);
             testAudio.volume = 1;
             testAudio.play()
               .then(() => console.log("🔊 TEST: Audio played!"))
               .catch(e => console.error("🔊 TEST ERROR:", e));
           }}
-          className="px-4 py-3 rounded-xl text-sm font-medium bg-blue-500 text-white hover:bg-blue-600"
+          className="flex items-center gap-2 px-4 py-3 rounded-xl text-sm font-medium bg-blue-500 text-white hover:bg-blue-600 transition-colors"
         >
-          🔊 Test Ovoz
+          <BiVolumeFull className="text-lg" />
+          Test ovoz
         </button>
       </div>
 

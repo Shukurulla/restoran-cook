@@ -1,10 +1,21 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { PrinterInfo } from "@/types";
 import { PrinterAPI } from "@/services/printer";
 import { Button } from "@/components/ui/button";
-import { BiCog, BiPrinter, BiServer, BiRefresh, BiX } from "react-icons/bi";
+import { BiCog, BiPrinter, BiServer, BiRefresh, BiX, BiVolumeFull, BiPlay } from "react-icons/bi";
+
+// Mavjud ringtonelar ro'yxati
+const AVAILABLE_RINGTONES = [
+  { id: "mixkit", name: "Mixkit Notification", path: "/mixkit-positive-notification-951.wav" },
+  { id: "callisto", name: "Callisto", path: "/callisto-170178.mp3" },
+  { id: "interface", name: "Interface", path: "/interface-2-126517.mp3" },
+  { id: "new-notification", name: "New Notification", path: "/new-notification-018-363746.mp3" },
+  { id: "ominant", name: "Ominant", path: "/ominant-163603.mp3" },
+  { id: "rising-funny", name: "Rising Funny", path: "/rising-funny-game-effect-132474.mp3" },
+  { id: "xylesizer", name: "Xylesizer", path: "/xylesizer-163606.mp3" },
+];
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -20,6 +31,11 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   const [isLoadingPrinters, setIsLoadingPrinters] = useState(false);
   const [isPrinting, setIsPrinting] = useState(false);
 
+  // Ringtone sozlamalari
+  const [selectedRingtone, setSelectedRingtone] = useState<string>("/mixkit-positive-notification-951.wav");
+  const [playingRingtone, setPlayingRingtone] = useState<string | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
   useEffect(() => {
     if (isOpen) {
       loadPrinters();
@@ -27,14 +43,26 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
       const savedUrl = localStorage.getItem("serverUrl");
       const savedAutoPrint = localStorage.getItem("autoPrint");
       const savedPrintCancelled = localStorage.getItem("printCancelled");
+      const savedRingtone = localStorage.getItem("selectedRingtone");
 
       if (savedPrinter) setSelectedPrinter(savedPrinter);
       if (savedUrl) setServerUrl(savedUrl);
       if (savedAutoPrint !== null) setAutoPrint(savedAutoPrint === "true");
       if (savedPrintCancelled !== null)
         setPrintCancelled(savedPrintCancelled === "true");
+      if (savedRingtone) setSelectedRingtone(savedRingtone);
     }
   }, [isOpen]);
+
+  // Cleanup audio on unmount
+  useEffect(() => {
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
+    };
+  }, []);
 
   const loadPrinters = async () => {
     setIsLoadingPrinters(true);
@@ -68,12 +96,47 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
     }
   };
 
+  // Ringtoneni test qilish
+  const handlePlayRingtone = (ringtonePath: string) => {
+    // Oldingi ovozni to'xtatish
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current = null;
+    }
+
+    // Agar xuddi shu ringtone bo'lsa, to'xtatish
+    if (playingRingtone === ringtonePath) {
+      setPlayingRingtone(null);
+      return;
+    }
+
+    // Yangi ovoz ijro etish
+    const audio = new Audio(ringtonePath);
+    audioRef.current = audio;
+    setPlayingRingtone(ringtonePath);
+
+    audio.play()
+      .then(() => {
+        console.log("🔊 Playing ringtone:", ringtonePath);
+      })
+      .catch((error) => {
+        console.error("🔊 Failed to play ringtone:", error);
+        setPlayingRingtone(null);
+      });
+
+    // Tugaganda stateni tozalash
+    audio.onended = () => {
+      setPlayingRingtone(null);
+    };
+  };
+
   const handleSave = async () => {
     // Browser localStorage ga saqlash
     localStorage.setItem("selectedPrinter", selectedPrinter);
     localStorage.setItem("serverUrl", serverUrl);
     localStorage.setItem("autoPrint", String(autoPrint));
     localStorage.setItem("printCancelled", String(printCancelled));
+    localStorage.setItem("selectedRingtone", selectedRingtone);
 
     // Electron print server ga ham yuborish (sync qilish)
     if (selectedPrinter) {
@@ -181,6 +244,57 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
               <BiPrinter className="mr-2" />
               {isPrinting ? "Chop etilmoqda..." : "Test chop etish"}
             </Button>
+          </div>
+
+          {/* Ringtone Settings */}
+          <div className="space-y-4">
+            <h3 className="flex items-center gap-2 text-[15px] font-semibold">
+              <BiVolumeFull className="text-[#3b82f6]" />
+              Ovoz sozlamalari
+            </h3>
+
+            <div className="space-y-2">
+              <label className="text-sm text-muted-foreground">
+                Bildirishnoma ovozi
+              </label>
+              <div className="space-y-2 max-h-[200px] overflow-y-auto">
+                {AVAILABLE_RINGTONES.map((ringtone) => (
+                  <div
+                    key={ringtone.id}
+                    className={`flex items-center justify-between p-3 rounded-lg border transition-all cursor-pointer
+                      ${selectedRingtone === ringtone.path
+                        ? 'bg-[#3b82f6]/10 border-[#3b82f6]'
+                        : 'bg-secondary border-border hover:border-[#3b82f6]/50'
+                      }`}
+                    onClick={() => setSelectedRingtone(ringtone.path)}
+                  >
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="radio"
+                        name="ringtone"
+                        checked={selectedRingtone === ringtone.path}
+                        onChange={() => setSelectedRingtone(ringtone.path)}
+                        className="w-4 h-4 text-[#3b82f6]"
+                      />
+                      <span className="text-sm">{ringtone.name}</span>
+                    </div>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handlePlayRingtone(ringtone.path);
+                      }}
+                      className={`p-2 rounded-lg transition-colors
+                        ${playingRingtone === ringtone.path
+                          ? 'bg-[#22c55e] text-white'
+                          : 'bg-[#262626] text-muted-foreground hover:text-foreground'
+                        }`}
+                    >
+                      <BiPlay className="text-lg" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
 
           {/* Server Settings */}

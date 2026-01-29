@@ -3,7 +3,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { FoodItem, TabType } from '@/types';
 import { OrderCard } from './OrderCard';
-import { BiArchive, BiChevronLeft, BiChevronRight, BiTable } from 'react-icons/bi';
+import { BiArchive, BiChevronLeft, BiChevronRight, BiTable, BiFilter } from 'react-icons/bi';
 
 const ITEMS_PER_PAGE = 10;
 
@@ -31,6 +31,7 @@ export function FoodItemsList({
   const [tab, setTab] = useState<TabType>('new');
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedTable, setSelectedTable] = useState<string | null>(null);
+  const [showTableFilter, setShowTableFilter] = useState(false);
 
   // Orderlarni filterlash - har bir order o'z itemlari bilan
   const { preparingOrders, completedOrders, cancelledOrders } = useMemo(() => {
@@ -47,22 +48,24 @@ export function FoodItemsList({
       // Bekor qilinmagan itemlarni olish
       const activeItems = order.items.filter(item => !item.isCancelled && item.kitchenStatus !== 'cancelled');
 
-      // Barcha itemlar tayyor yoki served bo'lganini tekshirish (faqat active itemlar)
-      const allItemsReady = activeItems.length > 0 && activeItems.every(item => {
+      // MUHIM: Pending yoki preparing statusli itemlar bormi tekshirish
+      // Agar birorta item hali tayyor bo'lmagan bo'lsa - bu order tayyorlanmoqda tabida bo'lishi kerak
+      const hasPendingItems = activeItems.some(item => {
         const readyQty = item.readyQuantity || 0;
-        const isFullyReady = readyQty >= item.quantity;
-        const isReadyStatus = item.kitchenStatus === 'ready' || item.kitchenStatus === 'served';
-        return isFullyReady || isReadyStatus || item.isReady;
+        const remainingQty = item.quantity - readyQty;
+        const isPending = item.kitchenStatus === 'pending' || item.kitchenStatus === 'preparing' || !item.kitchenStatus;
+        // Item tayyor emas agar: qoldiq bor VA (pending status YOKI tayyor emas)
+        return remainingQty > 0 && (isPending || (!item.isReady && item.kitchenStatus !== 'ready' && item.kitchenStatus !== 'served'));
       });
 
-      // Agar tayyor bo'lmagan item bo'lsa - doim tayyorlanmoqda tabiga
-      if (!allItemsReady && activeItems.length > 0) {
+      // Agar pending item bo'lsa - doim tayyorlanmoqda tabiga
+      if (hasPendingItems && activeItems.length > 0) {
         preparing.push({ ...order, items: order.items });
         return;
       }
 
-      // Barcha itemlar tayyor bo'lsa - tugatilganlar
-      if (order.status === 'served' || order.status === 'ready' || order.status === 'paid' || allItemsReady) {
+      // Barcha itemlar tayyor bo'lsa YOKI order status tayyor/served/paid bo'lsa - tugatilganlar
+      if (order.status === 'served' || order.status === 'ready' || order.status === 'paid' || !hasPendingItems) {
         completed.push(order);
         return;
       }
@@ -80,19 +83,6 @@ export function FoodItemsList({
 
     return { preparingOrders: preparing, completedOrders: completed, cancelledOrders: cancelled };
   }, [items]);
-
-  // Tayyorlanayotgan itemlar soni (har bir orderdagi pending itemlar, cancelled itemlarni hisobga olmaymiz)
-  const preparingItemsCount = preparingOrders.reduce((sum, order) => {
-    return sum + order.items.filter(item => {
-      // Cancelled itemlarni hisobga olmaymiz
-      if (item.isCancelled || item.kitchenStatus === 'cancelled') return false;
-      const readyQty = item.readyQuantity || 0;
-      return item.quantity - readyQty > 0;
-    }).length;
-  }, 0);
-
-  // Tugatilgan itemlar soni
-  const completedItemsCount = completedOrders.reduce((sum, order) => sum + order.items.length, 0);
 
   const tabOrders = tab === 'new'
     ? preparingOrders
@@ -143,9 +133,9 @@ export function FoodItemsList({
   }, [totalPages, currentPage]);
 
   const tabs = [
-    { key: 'new' as TabType, label: 'Tayyorlanmoqda', count: preparingItemsCount, orderCount: preparingOrders.length, color: 'text-[#f97316]' },
-    { key: 'served' as TabType, label: 'Tugatilganlar', count: completedItemsCount, orderCount: completedOrders.length, color: 'text-[#22c55e]' },
-    { key: 'cancelled' as TabType, label: 'Rad etilgan', count: cancelledOrders.length, orderCount: cancelledOrders.length, color: 'text-[#ef4444]' },
+    { key: 'new' as TabType, label: 'Tayyorlanmoqda', orderCount: preparingOrders.length, color: 'bg-[#f97316]' },
+    { key: 'served' as TabType, label: 'Tugatilganlar', orderCount: completedOrders.length, color: 'bg-[#22c55e]' },
+    { key: 'cancelled' as TabType, label: 'Rad etilgan', orderCount: cancelledOrders.length, color: 'bg-[#ef4444]' },
   ];
 
   const isEmpty = filteredOrders.length === 0;
@@ -160,18 +150,13 @@ export function FoodItemsList({
             <button
               key={t.key}
               onClick={() => setTab(t.key)}
-              className={`px-5 py-2.5 rounded-md text-sm font-medium flex items-center gap-2 transition-all
+              className={`px-5 py-2.5 rounded-md text-sm font-medium transition-all
                 ${tab === t.key
                   ? 'bg-background text-foreground shadow-sm'
                   : 'text-muted-foreground hover:text-foreground'
                 }`}
             >
               {t.label}
-              <span className={`px-2 py-0.5 rounded text-[11px] min-w-[24px] text-center font-semibold
-                ${tab === t.key ? `bg-[#262626] ${t.color}` : 'bg-[#262626] text-muted-foreground'}`}
-              >
-                {t.orderCount}
-              </span>
             </button>
           ))}
         </div>
@@ -218,33 +203,56 @@ export function FoodItemsList({
         )}
       </div>
 
-      {/* Stollar - katakcha ko'rinishda */}
+      {/* Stollar filteri - toggle button orqasida */}
       {allTables.length > 1 && (
-        <div className="flex items-center gap-2 mb-4 flex-wrap">
-          <BiTable className="text-lg text-muted-foreground shrink-0" />
+        <div className="mb-4">
+          {/* Filter toggle button */}
           <button
-            onClick={() => setSelectedTable(null)}
-            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all border shrink-0 whitespace-nowrap
-              ${!selectedTable
+            onClick={() => setShowTableFilter(!showTableFilter)}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all border mb-2
+              ${showTableFilter || selectedTable
                 ? 'bg-[#3b82f6] text-white border-[#3b82f6]'
                 : 'bg-secondary text-muted-foreground border-border hover:text-foreground hover:border-[#3b82f6]/50'
               }`}
           >
-            Barchasi ({items.length})
+            <BiFilter className="text-lg" />
+            Stollar bo'yicha filter
+            {selectedTable && (
+              <span className="ml-1 px-2 py-0.5 bg-white/20 rounded text-xs">
+                {selectedTable}
+              </span>
+            )}
           </button>
-          {allTables.map((table) => (
-            <button
-              key={table.tableName}
-              onClick={() => setSelectedTable(selectedTable === table.tableName ? null : table.tableName)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all border shrink-0 whitespace-nowrap
-                ${selectedTable === table.tableName
-                  ? 'bg-[#f97316] text-white border-[#f97316]'
-                  : 'bg-secondary text-muted-foreground border-border hover:text-foreground hover:border-[#f97316]/50'
-                }`}
-            >
-              {table.tableName} ({table.count})
-            </button>
-          ))}
+
+          {/* Filter chips - faqat ochiq bo'lganda ko'rinadi */}
+          {showTableFilter && (
+            <div className="flex items-center gap-2 flex-wrap animate-in slide-in-from-top-2 duration-200">
+              <BiTable className="text-lg text-muted-foreground shrink-0" />
+              <button
+                onClick={() => setSelectedTable(null)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all border shrink-0 whitespace-nowrap
+                  ${!selectedTable
+                    ? 'bg-[#3b82f6] text-white border-[#3b82f6]'
+                    : 'bg-secondary text-muted-foreground border-border hover:text-foreground hover:border-[#3b82f6]/50'
+                  }`}
+              >
+                Barchasi ({items.length})
+              </button>
+              {allTables.map((table) => (
+                <button
+                  key={table.tableName}
+                  onClick={() => setSelectedTable(selectedTable === table.tableName ? null : table.tableName)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all border shrink-0 whitespace-nowrap
+                    ${selectedTable === table.tableName
+                      ? 'bg-[#f97316] text-white border-[#f97316]'
+                      : 'bg-secondary text-muted-foreground border-border hover:text-foreground hover:border-[#f97316]/50'
+                    }`}
+                >
+                  {table.tableName} ({table.count})
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
