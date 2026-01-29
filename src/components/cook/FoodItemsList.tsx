@@ -48,14 +48,13 @@ export function FoodItemsList({
       // Bekor qilinmagan itemlarni olish
       const activeItems = order.items.filter(item => !item.isCancelled && item.kitchenStatus !== 'cancelled');
 
-      // MUHIM: Pending yoki preparing statusli itemlar bormi tekshirish
-      // Agar birorta item hali tayyor bo'lmagan bo'lsa - bu order tayyorlanmoqda tabida bo'lishi kerak
+      // MUHIM: Hali tayyorlanmagan itemlar bormi tekshirish
+      // Agar birorta itemda qoldiq quantity bo'lsa - bu order tayyorlanmoqda tabida bo'lishi kerak
       const hasPendingItems = activeItems.some(item => {
         const readyQty = item.readyQuantity || 0;
         const remainingQty = item.quantity - readyQty;
-        const isPending = item.kitchenStatus === 'pending' || item.kitchenStatus === 'preparing' || !item.kitchenStatus;
-        // Item tayyor emas agar: qoldiq bor VA (pending status YOKI tayyor emas)
-        return remainingQty > 0 && (isPending || (!item.isReady && item.kitchenStatus !== 'ready' && item.kitchenStatus !== 'served'));
+        // Item tayyor emas agar qoldiq quantity bor bo'lsa (isReady yoki kitchenStatus ga qaramasdan)
+        return remainingQty > 0;
       });
 
       // Agar pending item bo'lsa - doim tayyorlanmoqda tabiga
