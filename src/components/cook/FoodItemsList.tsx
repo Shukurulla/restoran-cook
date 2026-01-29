@@ -79,12 +79,13 @@ export function FoodItemsList({
         });
 
         // Virtual order yaratish - addedAt ni createdAt sifatida ishlatish
-        const virtualOrder: FoodItem = {
+        // _id original qoladi (API uchun), virtualKey faqat React key uchun
+        const virtualOrder = {
           ...order,
-          _id: `${order._id}_${addedAt}`, // Unique ID
           items: groupItems,
           createdAt: addedAt, // Saralash uchun addedAt ishlatiladi
-        };
+          virtualKey: `${order._id}_${addedAt}`, // React key uchun
+        } as FoodItem & { virtualKey: string };
 
         if (hasPendingItems) {
           preparing.push(virtualOrder);
@@ -294,7 +295,7 @@ export function FoodItemsList({
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {paginatedOrders.map((order) => (
             <OrderCard
-              key={order._id}
+              key={(order as FoodItem & { virtualKey?: string }).virtualKey || order._id}
               order={order}
               onMarkReady={onMarkReady}
               onRevertReady={onRevertReady}
