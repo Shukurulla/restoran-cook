@@ -94,10 +94,9 @@ export function FoodItemsList({
       });
     });
 
-    // Vaqt bo'yicha saralash - eng eski birinchi (tayyorlanmoqda)
+    // Vaqt bo'yicha saralash - eng eski birinchi, eng yangi oxirida
     preparing.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
-    // Eng yangi birinchi (tugatilganlar)
-    completed.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    completed.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
 
     return { preparingOrders: preparing, completedOrders: completed, cancelledOrders: cancelled };
   }, [items]);
