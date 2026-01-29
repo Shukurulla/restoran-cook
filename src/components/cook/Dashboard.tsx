@@ -278,6 +278,27 @@ export function Dashboard() {
       setIsConnected(false);
     });
 
+    // ============================================
+    // 🖨️ PRINTER LOGGING HELPER
+    // ============================================
+    const logPrinterData = (eventType: string, printData: Record<string, unknown>, willPrint: boolean) => {
+      console.log("\n");
+      console.log("╔══════════════════════════════════════════════════════════════╗");
+      console.log(`║ 🖨️ PRINTER LOG - ${eventType.padEnd(43)}║`);
+      console.log("╠══════════════════════════════════════════════════════════════╣");
+      console.log("║ 📅 Vaqt:", new Date().toLocaleString("uz-UZ").padEnd(51) + "║");
+      console.log("║ 📋 Event:", eventType.padEnd(51) + "║");
+      console.log("║ 🖨️ Printer:", (localStorage.getItem("selectedPrinter") || "TANLANMAGAN").padEnd(48) + "║");
+      console.log("║ ⚙️ Auto-print:", (localStorage.getItem("autoPrint") !== "false" ? "YOQILGAN ✅" : "O'CHIRILGAN ❌").padEnd(46) + "║");
+      console.log("║ ⚙️ Print cancelled:", (localStorage.getItem("printCancelled") === "true" ? "YOQILGAN ✅" : "O'CHIRILGAN ❌").padEnd(41) + "║");
+      console.log("║ 📤 Chop etiladi:", (willPrint ? "HA ✅" : "YO'Q ❌").padEnd(44) + "║");
+      console.log("╠══════════════════════════════════════════════════════════════╣");
+      console.log("║ 📦 PRINTERGA YUBORILADIGAN MA'LUMOT:                         ║");
+      console.log("╚══════════════════════════════════════════════════════════════╝");
+      console.log(JSON.stringify(printData, null, 2));
+      console.log("════════════════════════════════════════════════════════════════\n");
+    };
+
     // Listen for new kitchen orders (filtered by cook's categories)
     newSocket.on(
       "new_kitchen_order",
@@ -288,12 +309,10 @@ export function Dashboard() {
         newItems?: Array<Record<string, unknown>>;
         itemsAddedToExisting?: boolean;
       }) => {
-        console.log("🍽️🍽️🍽️ NEW_KITCHEN_ORDER EVENT RECEIVED 🍽️🍽️🍽️");
-        console.log("Full data:", data);
+        console.log("\n🍽️🍽️🍽️ SOCKET EVENT: new_kitchen_order 🍽️🍽️🍽️");
         console.log("isNewOrder:", data.isNewOrder);
         console.log("itemsAddedToExisting:", data.itemsAddedToExisting);
-        console.log("newItems:", data.newItems);
-        console.log("newItems length:", data.newItems?.length);
+        console.log("newItems count:", data.newItems?.length || 0);
         setSocketDebug("ORDER RECEIVED!");
 
         // Defensive check: ensure allOrders is an array
@@ -302,25 +321,18 @@ export function Dashboard() {
           calculateStats(data.allOrders);
         }
 
-        // Play sound for ANY new_kitchen_order event (new order or items added)
-        // Either newItems exists OR isNewOrder is true OR itemsAddedToExisting is true
+        // Play sound for ANY new_kitchen_order event
         const shouldPlaySound =
           (data.newItems && data.newItems.length > 0) ||
           data.isNewOrder ||
           data.itemsAddedToExisting;
 
-        console.log("🔔 Should play sound?", shouldPlaySound);
-
         if (shouldPlaySound) {
           const orderInfo = data.order || (data.allOrders && data.allOrders.length > 0 ? data.allOrders[data.allOrders.length - 1] : null);
           const tableName = orderInfo?.tableName || "Yangi buyurtma";
-
-          console.log("🔔🔔🔔 PLAYING SOUND NOW! 🔔🔔🔔");
-
-          // Play notification sound
+          console.log("🔔 PLAYING SOUND - tableName:", tableName);
           playNotificationSound();
 
-          // Show push notification
           if (data.newItems && data.newItems.length > 0) {
             notificationService.showNewOrderNotification(
               tableName,
@@ -332,38 +344,48 @@ export function Dashboard() {
 
         // Auto-print - yangi buyurtmalar uchun chek chiqarish
         const autoPrintEnabled = localStorage.getItem("autoPrint") !== "false";
-        console.log("🖨️ AUTO-PRINT enabled:", autoPrintEnabled);
 
-        // newItems mavjud bo'lsa printerga yuborish
-        if (autoPrintEnabled && data.newItems && data.newItems.length > 0) {
+        if (data.newItems && data.newItems.length > 0) {
           const orderInfo = data.order || (data.allOrders && data.allOrders.length > 0 ? data.allOrders[data.allOrders.length - 1] : null);
           const tableName = orderInfo?.tableName || "Noma'lum stol";
           const waiterName = orderInfo?.waiterName || "";
 
-          console.log("🖨️ SENDING TO PRINTER");
-          console.log("Table:", tableName, "Waiter:", waiterName);
-
-          // Print server ga yuborish (printer server o'zi tanlangan printerni ishlatadi)
-          PrinterAPI.printOrderDirect(
+          const printData = {
+            type: "YANGI_BUYURTMA",
             tableName,
             waiterName,
-            data.newItems as Array<{ foodName?: string; name?: string; quantity?: number }>
-          ).then((result: { success: boolean; error?: string }) => {
-            console.log("🖨️ PRINT RESULT:", result.success ? "✅ SUCCESS" : "❌ FAILED", result.error || "");
-            setSocketDebug("PRINT: " + (result.success ? "SUCCESS" : "FAILED"));
-          }).catch((err: Error) => {
-            console.error("🖨️ PRINT ERROR:", err.message);
-            setSocketDebug("PRINT ERROR: " + err.message);
-          });
-        } else {
-          console.log("🖨️ PRINT SKIPPED:", !autoPrintEnabled ? "disabled" : "no newItems");
+            items: data.newItems.map((item: Record<string, unknown>) => ({
+              foodName: item.foodName || item.name || "Noma'lum",
+              quantity: item.quantity || 1
+            })),
+            timestamp: new Date().toISOString()
+          };
+
+          // 🖨️ LOG TO CONSOLE
+          logPrinterData("YANGI BUYURTMA / ITEM QO'SHILDI", printData, autoPrintEnabled);
+
+          if (autoPrintEnabled) {
+            PrinterAPI.printOrderDirect(
+              tableName,
+              waiterName,
+              data.newItems as Array<{ foodName?: string; name?: string; quantity?: number }>
+            ).then((result: { success: boolean; error?: string }) => {
+              console.log("🖨️ PRINT RESULT:", result.success ? "✅ MUVAFFAQIYATLI" : "❌ XATO", result.error || "");
+              setSocketDebug("PRINT: " + (result.success ? "SUCCESS" : "FAILED"));
+            }).catch((err: Error) => {
+              console.error("🖨️ PRINT ERROR:", err.message);
+              setSocketDebug("PRINT ERROR: " + err.message);
+            });
+          }
         }
       },
     );
 
     // Listen for kitchen orders updated
     newSocket.on("kitchen_orders_updated", (orders: FoodItem[]) => {
-      console.log("📋 KITCHEN_ORDERS_UPDATED received, count:", orders?.length);
+      console.log("\n📋📋📋 SOCKET EVENT: kitchen_orders_updated 📋📋📋");
+      console.log("Orders count:", orders?.length);
+
       // Defensive check: ensure orders is an array
       if (Array.isArray(orders)) {
         // Count total pending items
@@ -372,12 +394,39 @@ export function Dashboard() {
         }, 0);
 
         const prevCount = prevItemsCountRef.current;
-        console.log("📋 Pending items: prev=", prevCount, "new=", newPendingCount);
+        const hasNewItems = newPendingCount > prevCount && prevCount > 0;
 
-        // If new pending items appeared, play sound
-        if (newPendingCount > prevCount && prevCount > 0) {
-          console.log("🔔🔔🔔 NEW ITEMS DETECTED via kitchen_orders_updated! 🔔🔔🔔");
+        console.log("📋 Pending items: oldingi=", prevCount, "yangi=", newPendingCount, "yangi item bormi:", hasNewItems);
+
+        // If new pending items appeared, play sound and potentially print
+        if (hasNewItems) {
+          console.log("🔔 YANGI ITEM ANIQLANDI - ovoz chalinadi");
           playNotificationSound();
+
+          // Find the orders with new pending items
+          const ordersWithNewItems = orders.filter(order =>
+            order.items?.some(item => item.kitchenStatus === 'pending')
+          );
+
+          if (ordersWithNewItems.length > 0) {
+            const printData = {
+              type: "KITCHEN_ORDERS_UPDATED",
+              prevPendingCount: prevCount,
+              newPendingCount: newPendingCount,
+              ordersWithPendingItems: ordersWithNewItems.map(order => ({
+                tableName: order.tableName,
+                waiterName: order.waiterName,
+                pendingItems: order.items?.filter(i => i.kitchenStatus === 'pending').map(i => ({
+                  foodName: i.foodName,
+                  quantity: i.quantity
+                }))
+              })),
+              timestamp: new Date().toISOString()
+            };
+
+            // 🖨️ LOG TO CONSOLE
+            logPrinterData("KITCHEN ORDERS YANGILANDI (yangi itemlar)", printData, false);
+          }
         }
 
         prevItemsCountRef.current = newPendingCount;
@@ -417,32 +466,135 @@ export function Dashboard() {
     });
 
     // Order bekor qilinganda (admin panel tomonidan)
-    newSocket.on("order_cancelled", () => {
-      console.log("Order cancelled event received");
+    newSocket.on("order_cancelled", (data: { order?: FoodItem; orderId?: string; tableName?: string; items?: Array<{ foodName?: string; name?: string; quantity?: number }> }) => {
+      console.log("\n❌❌❌ SOCKET EVENT: order_cancelled ❌❌❌");
+
+      const printCancelledEnabled = localStorage.getItem("printCancelled") === "true";
+      const tableName = data.order?.tableName || data.tableName || "Noma'lum";
+      const cancelledItems = data.order?.items || data.items || [];
+
+      const printData = {
+        type: "ORDER_BEKOR_QILINDI",
+        tableName,
+        orderId: data.order?._id || data.orderId,
+        items: cancelledItems.map((item: { foodName?: string; name?: string; quantity?: number }) => ({
+          foodName: item.foodName || item.name || "Noma'lum",
+          quantity: item.quantity || 1
+        })),
+        timestamp: new Date().toISOString()
+      };
+
+      // 🖨️ LOG TO CONSOLE
+      logPrinterData("ORDER BEKOR QILINDI", printData, printCancelledEnabled);
+
+      if (printCancelledEnabled && cancelledItems.length > 0) {
+        cancelledItems.forEach((item: { foodName?: string; name?: string; quantity?: number }) => {
+          PrinterAPI.printCancelled({
+            tableName,
+            foodName: item.foodName || item.name || "Noma'lum",
+            quantity: item.quantity || 1
+          }).then((result: { success: boolean; error?: string }) => {
+            console.log("🖨️ CANCELLED PRINT:", result.success ? "✅" : "❌", result.error || "");
+          });
+        });
+      }
+
       loadData();
     });
 
     // Order o'chirilganda
-    newSocket.on("order_deleted", () => {
-      console.log("Order deleted event received");
+    newSocket.on("order_deleted", (data: { orderId?: string; tableName?: string }) => {
+      console.log("\n🗑️🗑️🗑️ SOCKET EVENT: order_deleted 🗑️🗑️🗑️");
+
+      const printData = {
+        type: "ORDER_O'CHIRILDI",
+        orderId: data.orderId,
+        tableName: data.tableName,
+        timestamp: new Date().toISOString()
+      };
+
+      // 🖨️ LOG TO CONSOLE (deleted orders usually don't print)
+      logPrinterData("ORDER O'CHIRILDI", printData, false);
+
       loadData();
     });
 
     // Order yangilanganda (item cancel, update, va boshqalar)
-    newSocket.on("order_updated", (data: { order?: FoodItem; action?: string }) => {
-      console.log("Order updated event received:", data.action);
+    newSocket.on("order_updated", (data: { order?: FoodItem; action?: string; updatedItems?: Array<{ foodName?: string; name?: string; quantity?: number }> }) => {
+      console.log("\n🔄🔄🔄 SOCKET EVENT: order_updated 🔄🔄🔄");
+      console.log("Action:", data.action);
+
+      const printData = {
+        type: "ORDER_YANGILANDI",
+        action: data.action,
+        tableName: data.order?.tableName,
+        orderId: data.order?._id,
+        updatedItems: data.updatedItems,
+        timestamp: new Date().toISOString()
+      };
+
+      // 🖨️ LOG TO CONSOLE
+      logPrinterData("ORDER YANGILANDI", printData, false);
+
       loadData();
     });
 
     // Item bekor qilinganda (alohida event)
-    newSocket.on("order_item_cancelled", (data: { order?: FoodItem; action?: string }) => {
-      console.log("Order item cancelled event received:", data);
+    newSocket.on("order_item_cancelled", (data: {
+      order?: FoodItem;
+      orderId?: string;
+      tableName?: string;
+      cancelledItem?: { foodName?: string; name?: string; quantity?: number; reason?: string };
+      action?: string
+    }) => {
+      console.log("\n🚫🚫🚫 SOCKET EVENT: order_item_cancelled 🚫🚫🚫");
+
+      const printCancelledEnabled = localStorage.getItem("printCancelled") === "true";
+      const tableName = data.order?.tableName || data.tableName || "Noma'lum";
+      const cancelledItem = data.cancelledItem;
+
+      const printData = {
+        type: "ITEM_BEKOR_QILINDI",
+        tableName,
+        orderId: data.order?._id || data.orderId,
+        cancelledItem: cancelledItem ? {
+          foodName: cancelledItem.foodName || cancelledItem.name || "Noma'lum",
+          quantity: cancelledItem.quantity || 1,
+          reason: cancelledItem.reason || "Sabab ko'rsatilmagan"
+        } : null,
+        timestamp: new Date().toISOString()
+      };
+
+      // 🖨️ LOG TO CONSOLE
+      logPrinterData("ITEM BEKOR QILINDI", printData, printCancelledEnabled && !!cancelledItem);
+
+      if (printCancelledEnabled && cancelledItem) {
+        PrinterAPI.printCancelled({
+          tableName,
+          foodName: cancelledItem.foodName || cancelledItem.name || "Noma'lum",
+          quantity: cancelledItem.quantity || 1
+        }).then((result: { success: boolean; error?: string }) => {
+          console.log("🖨️ CANCELLED ITEM PRINT:", result.success ? "✅" : "❌", result.error || "");
+        });
+      }
+
       loadData();
     });
 
     // Order to'langanda - tugatilganlar tabida qolishi uchun
-    newSocket.on("order_paid", () => {
-      console.log("Order paid event received");
+    newSocket.on("order_paid", (data: { order?: FoodItem; orderId?: string; tableName?: string }) => {
+      console.log("\n💰💰💰 SOCKET EVENT: order_paid 💰💰💰");
+
+      const printData = {
+        type: "ORDER_TO'LANDI",
+        tableName: data.order?.tableName || data.tableName,
+        orderId: data.order?._id || data.orderId,
+        timestamp: new Date().toISOString()
+      };
+
+      // 🖨️ LOG TO CONSOLE (paid orders don't need kitchen print)
+      logPrinterData("ORDER TO'LANDI", printData, false);
+
       loadData();
     });
 
