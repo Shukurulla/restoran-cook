@@ -55,6 +55,11 @@ export function Dashboard() {
   // Track previous items count to detect new items
   const prevItemsCountRef = useRef<number>(0);
 
+  // 🔑 INITIAL LOAD FLAG - sahifa yangilanganida eski orderlar chop etilmasligi uchun
+  // Bu ref faqat birinchi data yuklangandan keyin true bo'ladi
+  // Shundan keyingina yangi orderlar chop etiladi
+  const initialLoadCompleteRef = useRef<boolean>(false);
+
   // Audio ref - professional approach
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const audioUnlockedRef = useRef(false);
@@ -337,7 +342,13 @@ export function Dashboard() {
         // Auto-print - yangi buyurtmalar uchun chek chiqarish
         const autoPrintEnabled = localStorage.getItem("autoPrint") !== "false";
 
-        if (data.newItems && data.newItems.length > 0) {
+        // 🔑 INITIAL LOAD CHECK - faqat initial load tugagandan keyin chop etish
+        // Bu sahifa yangilanganida eski orderlar chop etilishini oldini oladi
+        if (!initialLoadCompleteRef.current) {
+          console.log("🖨️ SKIPPED PRINT - initial load not complete yet (new_kitchen_order)");
+        }
+
+        if (data.newItems && data.newItems.length > 0 && initialLoadCompleteRef.current) {
           const orderInfo = data.order || (data.allOrders && data.allOrders.length > 0 ? data.allOrders[data.allOrders.length - 1] : null);
           const orderId = orderInfo?._id || '';
           const tableName = orderInfo?.tableName || "Noma'lum stol";
@@ -404,9 +415,38 @@ export function Dashboard() {
     newSocket.on("kitchen_orders_updated", (orders: FoodItem[]) => {
       console.log("\n📋📋📋 SOCKET EVENT: kitchen_orders_updated 📋📋📋");
       console.log("Orders count:", orders?.length);
+      console.log("Initial load complete:", initialLoadCompleteRef.current);
 
       // Defensive check: ensure orders is an array
       if (Array.isArray(orders)) {
+        // 🔑 INITIAL LOAD - birinchi data kelganda flag ni true qilamiz
+        // Bu sahifa yangilanganida eski orderlar chop etilishini oldini oladi
+        if (!initialLoadCompleteRef.current) {
+          console.log("🔑 INITIAL LOAD COMPLETE - keyingi yangi orderlar chop etiladi");
+          initialLoadCompleteRef.current = true;
+
+          // Birinchi yuklashda itemlarni printedItemsRef ga qo'shish
+          // Bu eski itemlar keyinchalik "yangi" deb hisoblanmasligi uchun
+          orders.forEach(order => {
+            const pendingItems = order.items?.filter(i => i.kitchenStatus === 'pending') || [];
+            pendingItems.forEach((item, idx) => {
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              const itemId = (item as any)._id || `${idx}`;
+              const itemKey = `${order._id}-${itemId}-${item.foodName}-${item.quantity}`;
+              printedItemsRef.current.add(itemKey);
+            });
+          });
+          console.log("🔑 Registered", printedItemsRef.current.size, "existing items to prevent re-printing");
+
+          // State yangilash, lekin chop etish yo'q
+          prevItemsCountRef.current = orders.reduce((sum, order) => {
+            return sum + (order.items?.filter(i => i.kitchenStatus === 'pending').length || 0);
+          }, 0);
+          setItems(orders);
+          calculateStats(orders);
+          return; // Early return - birinchi yuklashda chop etmaymiz
+        }
+
         // Count total pending items
         const newPendingCount = orders.reduce((sum, order) => {
           return sum + (order.items?.filter(i => i.kitchenStatus === 'pending').length || 0);
