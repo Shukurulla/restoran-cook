@@ -52,6 +52,10 @@ export function Dashboard() {
   // Shundan keyingina yangi orderlar chop etiladi
   const initialLoadCompleteRef = useRef<boolean>(false);
 
+  // 📦 PREVIOUS ORDERS REF - yangi itemlarni aniqlash uchun
+  // kitchen_orders_updated da fallback print uchun ishlatiladi
+  const prevOrdersRef = useRef<Map<string, Set<string>>>(new Map());
+
   // Audio ref - professional approach
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const audioUnlockedRef = useRef(false);
@@ -378,8 +382,7 @@ export function Dashboard() {
     );
 
     // Listen for kitchen orders updated
-    // ⚠️ BU HANDLER PRINT QILMAYDI - faqat state yangilaydi
-    // Print faqat new_kitchen_order da amalga oshiriladi (dublikatlarni oldini olish)
+    // 🖨️ FALLBACK PRINT - new_kitchen_order kelmasa, bu handler yangi itemlarni aniqlaydi va print qiladi
     newSocket.on("kitchen_orders_updated", (orders: FoodItem[]) => {
       console.log("\n📋📋📋 SOCKET EVENT: kitchen_orders_updated 📋📋📋");
       console.log("Orders count:", orders?.length);
@@ -407,16 +410,124 @@ export function Dashboard() {
           const registeredCount = printQueue.registerExistingItems(ordersForQueue);
           console.log("🔑 Registered", registeredCount, "existing items to prevent re-printing");
 
+          // 📦 prevOrdersRef ni yangilash (har bir order uchun item ID lar)
+          const newPrevOrders = new Map<string, Set<string>>();
+          orders.forEach(order => {
+            const itemIds = new Set<string>();
+            (order.items || []).forEach((item: { _id?: string; foodName?: string }, idx: number) => {
+              // Unique key: itemId + foodName
+              const itemKey = `${item._id || `idx-${idx}`}-${item.foodName || ''}`;
+              itemIds.add(itemKey);
+            });
+            newPrevOrders.set(order._id, itemIds);
+          });
+          prevOrdersRef.current = newPrevOrders;
+
           setItems(orders);
           calculateStats(orders);
           return; // Early return - birinchi yuklashda chop etmaymiz
         }
 
-        // State yangilash (print qilmaymiz - new_kitchen_order buni qiladi)
+        // ======================================================
+        // 🖨️ FALLBACK PRINT LOGIC - yangi itemlarni aniqlash
+        // new_kitchen_order kelmasa ham, bu yerda yangi itemlarni topamiz
+        // ======================================================
+        const autoPrintEnabled = localStorage.getItem("autoPrint") !== "false";
+
+        if (autoPrintEnabled) {
+          // Yangi itemlarni aniqlash
+          const newItemsToPrint: Array<{
+            orderId: string;
+            tableName: string;
+            waiterName: string;
+            items: Array<{ itemId: string; foodName: string; quantity: number }>;
+          }> = [];
+
+          orders.forEach(order => {
+            const prevItemIds = prevOrdersRef.current.get(order._id) || new Set<string>();
+            const newItems: Array<{ itemId: string; foodName: string; quantity: number }> = [];
+
+            (order.items || []).forEach((item: { _id?: string; foodName?: string; quantity?: number; kitchenStatus?: string }, idx: number) => {
+              const itemKey = `${item._id || `idx-${idx}`}-${item.foodName || ''}`;
+
+              // Faqat pending statusdagi yangi itemlarni olish
+              if (!prevItemIds.has(itemKey) && item.kitchenStatus === 'pending') {
+                newItems.push({
+                  itemId: item._id || `idx-${idx}`,
+                  foodName: item.foodName || "Noma'lum",
+                  quantity: item.quantity || 1
+                });
+              }
+            });
+
+            if (newItems.length > 0) {
+              newItemsToPrint.push({
+                orderId: order._id,
+                tableName: order.tableName,
+                waiterName: order.waiterName || '',
+                items: newItems
+              });
+            }
+          });
+
+          // Agar yangi itemlar bo'lsa - print qilish va ovoz chiqarish
+          if (newItemsToPrint.length > 0) {
+            console.log("🖨️ FALLBACK: Yangi itemlar aniqlandi!", newItemsToPrint);
+
+            // 🔔 Ovoz chiqarish
+            playNotificationSound();
+
+            // 🖨️ Har bir order uchun print qilish
+            newItemsToPrint.forEach(orderToPrint => {
+              const { added, skipped } = printQueue.addItems(
+                orderToPrint.orderId,
+                orderToPrint.tableName,
+                orderToPrint.waiterName,
+                orderToPrint.items
+              );
+
+              if (added > 0) {
+                console.log(`🖨️ [FALLBACK] Added ${added} items to queue, skipped ${skipped} duplicates`);
+
+                // Browser notification
+                notificationService.showNewOrderNotification(
+                  orderToPrint.tableName,
+                  added,
+                  orderToPrint.items.map(i => ({ foodName: i.foodName, quantity: i.quantity }))
+                );
+
+                // Console log
+                logPrinterData("FALLBACK - YANGI BUYURTMA", {
+                  type: "FALLBACK_PRINT",
+                  tableName: orderToPrint.tableName,
+                  waiterName: orderToPrint.waiterName,
+                  itemsAdded: added,
+                  itemsSkipped: skipped,
+                  items: orderToPrint.items,
+                  timestamp: new Date().toISOString()
+                }, true);
+              }
+            });
+          }
+        }
+
+        // 📦 prevOrdersRef ni yangilash (keyingi compare uchun)
+        const newPrevOrders = new Map<string, Set<string>>();
+        orders.forEach(order => {
+          const itemIds = new Set<string>();
+          (order.items || []).forEach((item: { _id?: string; foodName?: string }, idx: number) => {
+            const itemKey = `${item._id || `idx-${idx}`}-${item.foodName || ''}`;
+            itemIds.add(itemKey);
+          });
+          newPrevOrders.set(order._id, itemIds);
+        });
+        prevOrdersRef.current = newPrevOrders;
+
+        // State yangilash
         setItems(orders);
         calculateStats(orders);
 
-        console.log("📋 State updated (no print - handled by new_kitchen_order)");
+        console.log("📋 State updated with fallback print check");
       } else {
         console.error('kitchen_orders_updated received non-array:', orders);
       }
