@@ -49,6 +49,10 @@ export interface PrintResult {
 /**
  * O'zbekiston vaqtini olish (UTC+5)
  * Tizim timezone'idan qat'i nazar, har doim O'zbekiston vaqtini qaytaradi
+ *
+ * MUHIM: Tayyor formatlangan string qaytaramiz!
+ * cook-electron bu stringni parse qilmaydi, to'g'ridan-to'g'ri ko'rsatadi.
+ * Format: "DD.MM.YYYY HH:mm:ss"
  */
 function getUzbekistanTime(): string {
   const now = new Date();
@@ -57,7 +61,17 @@ function getUzbekistanTime(): string {
   const localOffset = now.getTimezoneOffset(); // local offset in minutes (negative for east)
   const totalOffsetMs = (uzbekistanOffset + localOffset) * 60 * 1000;
   const uzbekistanDate = new Date(now.getTime() + totalOffsetMs);
-  return uzbekistanDate.toISOString();
+
+  // Tayyor formatlangan string - cook-electron buni to'g'ridan-to'g'ri ko'rsatadi
+  // Format: "DD.MM.YYYY HH:mm:ss" (O'zbekiston standarti)
+  const day = String(uzbekistanDate.getUTCDate()).padStart(2, '0');
+  const month = String(uzbekistanDate.getUTCMonth() + 1).padStart(2, '0');
+  const year = uzbekistanDate.getUTCFullYear();
+  const hours = String(uzbekistanDate.getUTCHours()).padStart(2, '0');
+  const minutes = String(uzbekistanDate.getUTCMinutes()).padStart(2, '0');
+  const seconds = String(uzbekistanDate.getUTCSeconds()).padStart(2, '0');
+
+  return `${day}.${month}.${year} ${hours}:${minutes}:${seconds}`;
 }
 
 /**
@@ -280,15 +294,22 @@ export const PrinterAPI = {
   /**
    * Buyurtma chekini to'g'ridan-to'g'ri chop etish (Dashboard auto-print uchun)
    * Har doim localStorage dan tanlangan printerni yuboradi
+   *
+   * @param tableName - Stol nomi
+   * @param waiterName - Ofitsiant ismi
+   * @param items - Taomlar ro'yxati
+   * @param printerName - Printer nomi (ixtiyoriy)
+   * @param idempotencyKey - Dublikat printlarni oldini olish uchun kalit (ixtiyoriy)
    */
   async printOrderDirect(
     tableName: string,
     waiterName: string,
     items: Array<{ foodName?: string; name?: string; quantity?: number }>,
-    printerName?: string
+    printerName?: string,
+    idempotencyKey?: string
   ): Promise<PrintResult> {
     console.log("=== PrinterAPI.printOrderDirect CALLED ===");
-    console.log("Input params:", { tableName, waiterName, itemsCount: items?.length, printerName });
+    console.log("Input params:", { tableName, waiterName, itemsCount: items?.length, printerName, idempotencyKey });
 
     try {
       // Printer name - har doim client localStorage dan olish
@@ -300,7 +321,7 @@ export const PrinterAPI = {
         return { success: false, error: 'Printer tanlanmagan. Sozlamalardan printer tanlang.' };
       }
 
-      const requestBody = {
+      const requestBody: Record<string, unknown> = {
         // Har doim printerName yuborish
         printerName: selectedPrinter,
         restaurantName: getRestaurantName(),
@@ -312,6 +333,11 @@ export const PrinterAPI = {
         })),
         createdAt: getUzbekistanTime()
       };
+
+      // Idempotency key qo'shish (agar berilgan bo'lsa)
+      if (idempotencyKey) {
+        requestBody.idempotencyKey = idempotencyKey;
+      }
 
       console.log("=== SENDING TO PRINTER SERVER ===");
       console.log("URL:", `${PRINT_SERVER_URL}/print/order`);

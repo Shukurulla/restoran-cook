@@ -5,6 +5,7 @@ import { io, Socket } from "socket.io-client";
 import { useAuth } from "@/context/AuthContext";
 import { api } from "@/services/api";
 import { PrinterAPI } from "@/services/printer";
+import { printQueue } from "@/services/print-queue";
 import { notificationService } from "@/services/notification";
 import { FoodItem, Stats, Shift } from "@/types";
 import { Header } from "./Header";
@@ -43,17 +44,8 @@ export function Dashboard() {
   // Loading state - tugmalarni disable qilish uchun
   const [isLoading, setIsLoading] = useState(false);
 
-  // Track printed orders to avoid duplicates
+  // Track printed orders to avoid duplicates (legacy - printQueue handles this now)
   const printedOrdersRef = useRef<Set<string>>(new Set());
-
-  // Track printed item IDs to avoid duplicate prints
-  const printedItemsRef = useRef<Set<string>>(new Set());
-
-  // Track previous items for detecting NEW items (not just count)
-  const prevItemsRef = useRef<Map<string, Set<string>>>(new Map()); // orderId -> Set of itemIds
-
-  // Track previous items count to detect new items
-  const prevItemsCountRef = useRef<number>(0);
 
   // 🔑 INITIAL LOAD FLAG - sahifa yangilanganida eski orderlar chop etilmasligi uchun
   // Bu ref faqat birinchi data yuklangandan keyin true bo'ladi
@@ -354,64 +346,38 @@ export function Dashboard() {
           const tableName = orderInfo?.tableName || "Noma'lum stol";
           const waiterName = orderInfo?.waiterName || "";
 
-          // DEDUPLICATION: Faqat hali chop etilmagan itemlarni filter qilish
-          const itemsToPrint: Array<{ foodName: string; quantity: number }> = [];
+          // PrintQueue ga itemlarni qo'shish (deduplication avtomatik)
+          const itemsForQueue = data.newItems.map((item: Record<string, unknown>) => ({
+            itemId: (item._id || '') as string,
+            foodName: (item.foodName || item.name || "Noma'lum") as string,
+            quantity: (item.quantity || 1) as number
+          }));
 
-          for (const item of data.newItems) {
-            const itemId = (item as Record<string, unknown>)._id || '';
-            const foodName = (item.foodName || item.name || "Noma'lum") as string;
-            const quantity = (item.quantity || 1) as number;
+          const { added, skipped } = printQueue.addItems(orderId, tableName, waiterName, itemsForQueue);
 
-            // Unique key: orderId + itemId + foodName + quantity
-            const printKey = `${orderId}-${itemId}-${foodName}-${quantity}`;
-
-            if (!printedItemsRef.current.has(printKey)) {
-              printedItemsRef.current.add(printKey);
-              itemsToPrint.push({ foodName, quantity });
-
-              // 60 sekunddan keyin tozalash (xotira uchun)
-              setTimeout(() => {
-                printedItemsRef.current.delete(printKey);
-              }, 60000);
-            } else {
-              console.log("🖨️ SKIPPED (already printed):", printKey);
-            }
-          }
-
-          // Faqat yangi itemlar bo'lsa chop etish
-          if (itemsToPrint.length > 0) {
+          if (added > 0) {
             const printData = {
               type: "YANGI_BUYURTMA",
               tableName,
               waiterName,
-              items: itemsToPrint,
+              itemsAdded: added,
+              itemsSkipped: skipped,
               timestamp: new Date().toISOString()
             };
 
             // 🖨️ LOG TO CONSOLE
             logPrinterData("YANGI BUYURTMA / ITEM QO'SHILDI", printData, autoPrintEnabled);
-
-            if (autoPrintEnabled) {
-              PrinterAPI.printOrderDirect(
-                tableName,
-                waiterName,
-                itemsToPrint
-              ).then((result: { success: boolean; error?: string }) => {
-                console.log("🖨️ PRINT RESULT:", result.success ? "✅ MUVAFFAQIYATLI" : "❌ XATO", result.error || "");
-                setSocketDebug("PRINT: " + (result.success ? "SUCCESS" : "FAILED"));
-              }).catch((err: Error) => {
-                console.error("🖨️ PRINT ERROR:", err.message);
-                setSocketDebug("PRINT ERROR: " + err.message);
-              });
-            }
+            console.log(`🖨️ [QUEUE] Added ${added} items, skipped ${skipped} duplicates`);
           } else {
-            console.log("🖨️ ALL ITEMS ALREADY PRINTED - skipping");
+            console.log("🖨️ ALL ITEMS ALREADY IN QUEUE - skipping");
           }
         }
       },
     );
 
     // Listen for kitchen orders updated
+    // ⚠️ BU HANDLER PRINT QILMAYDI - faqat state yangilaydi
+    // Print faqat new_kitchen_order da amalga oshiriladi (dublikatlarni oldini olish)
     newSocket.on("kitchen_orders_updated", (orders: FoodItem[]) => {
       console.log("\n📋📋📋 SOCKET EVENT: kitchen_orders_updated 📋📋📋");
       console.log("Orders count:", orders?.length);
@@ -420,123 +386,35 @@ export function Dashboard() {
       // Defensive check: ensure orders is an array
       if (Array.isArray(orders)) {
         // 🔑 INITIAL LOAD - birinchi data kelganda flag ni true qilamiz
-        // Bu sahifa yangilanganida eski orderlar chop etilishini oldini oladi
         if (!initialLoadCompleteRef.current) {
           console.log("🔑 INITIAL LOAD COMPLETE - keyingi yangi orderlar chop etiladi");
           initialLoadCompleteRef.current = true;
 
-          // Birinchi yuklashda itemlarni printedItemsRef ga qo'shish
-          // Bu eski itemlar keyinchalik "yangi" deb hisoblanmasligi uchun
-          orders.forEach(order => {
-            const pendingItems = order.items?.filter(i => i.kitchenStatus === 'pending') || [];
-            pendingItems.forEach((item, idx) => {
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              const itemId = (item as any)._id || `${idx}`;
-              const itemKey = `${order._id}-${itemId}-${item.foodName}-${item.quantity}`;
-              printedItemsRef.current.add(itemKey);
-            });
-          });
-          console.log("🔑 Registered", printedItemsRef.current.size, "existing items to prevent re-printing");
+          // PrintQueue ga mavjud itemlarni ro'yxatdan o'tkazish
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const ordersForQueue = orders.map(order => ({
+            _id: order._id,
+            items: (order.items || []).map((item: any, idx: number) => ({
+              _id: item._id || `idx-${idx}`,
+              foodName: item.foodName,
+              quantity: item.quantity,
+              kitchenStatus: item.kitchenStatus
+            }))
+          }));
 
-          // State yangilash, lekin chop etish yo'q
-          prevItemsCountRef.current = orders.reduce((sum, order) => {
-            return sum + (order.items?.filter(i => i.kitchenStatus === 'pending').length || 0);
-          }, 0);
+          const registeredCount = printQueue.registerExistingItems(ordersForQueue);
+          console.log("🔑 Registered", registeredCount, "existing items to prevent re-printing");
+
           setItems(orders);
           calculateStats(orders);
           return; // Early return - birinchi yuklashda chop etmaymiz
         }
 
-        // Count total pending items
-        const newPendingCount = orders.reduce((sum, order) => {
-          return sum + (order.items?.filter(i => i.kitchenStatus === 'pending').length || 0);
-        }, 0);
-
-        const prevCount = prevItemsCountRef.current;
-        const hasNewItems = newPendingCount > prevCount && prevCount > 0;
-
-        console.log("📋 Pending items: oldingi=", prevCount, "yangi=", newPendingCount, "yangi item bormi:", hasNewItems);
-
-        // Haqiqiy yangi itemlarni topish (oldin chop etilmaganlar)
-        const trulyNewItems: Array<{ orderId: string; tableName: string; waiterName: string; item: { _id: string; foodName: string; quantity: number } }> = [];
-
-        orders.forEach(order => {
-          const pendingItems = order.items?.filter(i => i.kitchenStatus === 'pending') || [];
-          pendingItems.forEach((item, idx) => {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const itemId = (item as any)._id || `${idx}`;
-            const itemKey = `${order._id}-${itemId}-${item.foodName}-${item.quantity}`;
-            if (!printedItemsRef.current.has(itemKey)) {
-              trulyNewItems.push({
-                orderId: order._id,
-                tableName: order.tableName || "Noma'lum",
-                waiterName: order.waiterName || "",
-                item: {
-                  _id: itemId,
-                  foodName: item.foodName,
-                  quantity: item.quantity
-                }
-              });
-              // Mark as printed
-              printedItemsRef.current.add(itemKey);
-            }
-          });
-        });
-
-        console.log("📋 Haqiqiy yangi itemlar soni:", trulyNewItems.length);
-
-        // If new pending items appeared, play sound and potentially print
-        if (trulyNewItems.length > 0) {
-          console.log("🔔 YANGI ITEM ANIQLANDI - ovoz chalinadi");
-          playNotificationSound();
-
-          const autoPrintEnabled = localStorage.getItem("autoPrint") !== "false";
-
-          // Group by order for printing
-          const orderGroups = new Map<string, { tableName: string; waiterName: string; items: Array<{ foodName: string; quantity: number }> }>();
-          trulyNewItems.forEach(({ orderId, tableName, waiterName, item }) => {
-            if (!orderGroups.has(orderId)) {
-              orderGroups.set(orderId, { tableName, waiterName, items: [] });
-            }
-            orderGroups.get(orderId)!.items.push({ foodName: item.foodName, quantity: item.quantity });
-          });
-
-          const printData = {
-            type: "KITCHEN_ORDERS_UPDATED",
-            prevPendingCount: prevCount,
-            newPendingCount: newPendingCount,
-            trulyNewItemsCount: trulyNewItems.length,
-            ordersWithNewItems: Array.from(orderGroups.entries()).map(([orderId, data]) => ({
-              orderId,
-              tableName: data.tableName,
-              waiterName: data.waiterName,
-              newItems: data.items
-            })),
-            timestamp: new Date().toISOString()
-          };
-
-          // 🖨️ LOG TO CONSOLE
-          logPrinterData("KITCHEN ORDERS YANGILANDI (yangi itemlar)", printData, autoPrintEnabled);
-
-          // Auto-print yangi itemlar uchun
-          if (autoPrintEnabled) {
-            orderGroups.forEach((data) => {
-              PrinterAPI.printOrderDirect(
-                data.tableName,
-                data.waiterName,
-                data.items
-              ).then((result: { success: boolean; error?: string }) => {
-                console.log("🖨️ KITCHEN_UPDATED PRINT:", data.tableName, result.success ? "✅" : "❌", result.error || "");
-              }).catch((err: Error) => {
-                console.error("🖨️ PRINT ERROR:", err.message);
-              });
-            });
-          }
-        }
-
-        prevItemsCountRef.current = newPendingCount;
+        // State yangilash (print qilmaymiz - new_kitchen_order buni qiladi)
         setItems(orders);
         calculateStats(orders);
+
+        console.log("📋 State updated (no print - handled by new_kitchen_order)");
       } else {
         console.error('kitchen_orders_updated received non-array:', orders);
       }
@@ -546,6 +424,12 @@ export function Dashboard() {
     newSocket.on("shift:opened", (data: { shift: Shift }) => {
       console.log("Smena ochildi:", data);
       setActiveShift(data.shift);
+
+      // 🔑 Yangi smena - print cache ni tozalash va initial load flag ni reset qilish
+      printQueue.clearCache();
+      initialLoadCompleteRef.current = false;
+      console.log("🔑 Print cache cleared for new shift");
+
       // Yangi smena ID si bilan ma'lumotlarni yuklash - 0 dan boshlaydi
       loadData(data.shift?._id);
     });
@@ -553,6 +437,12 @@ export function Dashboard() {
     newSocket.on("shift:closed", () => {
       console.log("Smena yopildi");
       setActiveShift(null);
+
+      // 🔑 Smena yopilganda cache tozalash
+      printQueue.clearCache();
+      initialLoadCompleteRef.current = false;
+      console.log("🔑 Print cache cleared - shift closed");
+
       // Smena yopilganda ma'lumotlarni tozalash
       setItems([]);
       setStats({
@@ -571,18 +461,41 @@ export function Dashboard() {
     });
 
     // Order bekor qilinganda (admin panel tomonidan)
-    newSocket.on("order_cancelled", (data: { order?: FoodItem; orderId?: string; tableName?: string; items?: Array<{ foodName?: string; name?: string; quantity?: number }> }) => {
+    // 🔑 Faqat bu cook ning kategoriyalariga tegishli itemlarni print qilish
+    newSocket.on("order_cancelled", (data: { order?: FoodItem; orderId?: string; tableName?: string; items?: Array<{ foodName?: string; name?: string; quantity?: number; category?: string }> }) => {
       console.log("\n❌❌❌ SOCKET EVENT: order_cancelled ❌❌❌");
 
       const printCancelledEnabled = localStorage.getItem("printCancelled") === "true";
       const tableName = data.order?.tableName || data.tableName || "Noma'lum";
-      const cancelledItems = data.order?.items || data.items || [];
+      const allCancelledItems = data.order?.items || data.items || [];
+
+      // 🔑 Faqat bu cook ning kategoriyalariga tegishli itemlarni filtrlash
+      const userCategories = user?.assignedCategories || [];
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const cancelledItems = allCancelledItems.filter((item: any) => {
+        // Agar user ning kategoriyalari bo'lmasa, hech narsa print qilmaymiz
+        if (userCategories.length === 0) return false;
+        // Item kategoriyasi user ning kategoriyalarida bormi
+        const itemCategory = item.category || item.categoryId;
+        return itemCategory && userCategories.includes(itemCategory);
+      });
+
+      console.log(`🔑 User categories: ${userCategories.join(', ')}`);
+      console.log(`🔑 Filtered cancelled items: ${cancelledItems.length} / ${allCancelledItems.length}`);
+
+      // Agar bu cook uchun tegishli item bo'lmasa, print qilmaymiz
+      if (cancelledItems.length === 0) {
+        console.log("🔑 No items for this cook's categories - skipping print");
+        loadData();
+        return;
+      }
 
       const printData = {
         type: "ORDER_BEKOR_QILINDI",
         tableName,
         orderId: data.order?._id || data.orderId,
-        items: cancelledItems.map((item: { foodName?: string; name?: string; quantity?: number }) => ({
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        items: cancelledItems.map((item: any) => ({
           foodName: item.foodName || item.name || "Noma'lum",
           quantity: item.quantity || 1
         })),
@@ -592,8 +505,9 @@ export function Dashboard() {
       // 🖨️ LOG TO CONSOLE
       logPrinterData("ORDER BEKOR QILINDI", printData, printCancelledEnabled);
 
-      if (printCancelledEnabled && cancelledItems.length > 0) {
-        cancelledItems.forEach((item: { foodName?: string; name?: string; quantity?: number }) => {
+      if (printCancelledEnabled) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        cancelledItems.forEach((item: any) => {
           PrinterAPI.printCancelled({
             tableName,
             foodName: item.foodName || item.name || "Noma'lum",
@@ -645,11 +559,12 @@ export function Dashboard() {
     });
 
     // Item bekor qilinganda (alohida event)
+    // 🔑 Faqat bu cook ning kategoriyalariga tegishli itemlarni print qilish
     newSocket.on("order_item_cancelled", (data: {
       order?: FoodItem;
       orderId?: string;
       tableName?: string;
-      cancelledItem?: { foodName?: string; name?: string; quantity?: number; reason?: string };
+      cancelledItem?: { foodName?: string; name?: string; quantity?: number; reason?: string; categoryId?: string; categoryName?: string };
       action?: string
     }) => {
       console.log("\n🚫🚫🚫 SOCKET EVENT: order_item_cancelled 🚫🚫🚫");
@@ -657,6 +572,22 @@ export function Dashboard() {
       const printCancelledEnabled = localStorage.getItem("printCancelled") === "true";
       const tableName = data.order?.tableName || data.tableName || "Noma'lum";
       const cancelledItem = data.cancelledItem;
+
+      // 🔑 Kategoriya tekshiruvi - bu cook uchun tegishlimi?
+      const userCategories = user?.assignedCategories || [];
+      const itemCategory = cancelledItem?.categoryId;
+      const isForThisCook = userCategories.length > 0 && itemCategory && userCategories.includes(itemCategory);
+
+      console.log(`🔑 User categories: ${userCategories.join(', ')}`);
+      console.log(`🔑 Cancelled item category: ${itemCategory}`);
+      console.log(`🔑 Is for this cook: ${isForThisCook}`);
+
+      // Agar bu cook uchun tegishli bo'lmasa, print qilmaymiz
+      if (!isForThisCook) {
+        console.log("🔑 Item not for this cook's categories - skipping print");
+        loadData();
+        return;
+      }
 
       const printData = {
         type: "ITEM_BEKOR_QILINDI",
