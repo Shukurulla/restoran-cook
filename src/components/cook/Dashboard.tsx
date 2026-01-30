@@ -450,8 +450,14 @@ export function Dashboard() {
             (order.items || []).forEach((item: { _id?: string; foodName?: string; quantity?: number; kitchenStatus?: string }, idx: number) => {
               const itemKey = `${item._id || `idx-${idx}`}-${item.foodName || ''}`;
 
-              // Faqat pending statusdagi yangi itemlarni olish
-              if (!prevItemIds.has(itemKey) && item.kitchenStatus === 'pending') {
+              // Yangi itemlarni olish - faqat tayyor/bekor qilinganlarni CHIQARIB TASHLASH
+              // kitchenStatus undefined, 'pending', yoki 'preparing' bo'lsa - print qilish
+              const isCompletedOrCancelled =
+                item.kitchenStatus === 'ready' ||
+                item.kitchenStatus === 'served' ||
+                item.kitchenStatus === 'cancelled';
+
+              if (!prevItemIds.has(itemKey) && !isCompletedOrCancelled) {
                 newItems.push({
                   itemId: item._id || `idx-${idx}`,
                   foodName: item.foodName || "Noma'lum",
