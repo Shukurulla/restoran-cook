@@ -47,6 +47,20 @@ export interface PrintResult {
 // ==================== HELPER FUNCTIONS ====================
 
 /**
+ * O'zbekiston vaqtini olish (UTC+5)
+ * Tizim timezone'idan qat'i nazar, har doim O'zbekiston vaqtini qaytaradi
+ */
+function getUzbekistanTime(): string {
+  const now = new Date();
+  // O'zbekiston UTC+5
+  const uzbekistanOffset = 5 * 60; // minutes
+  const localOffset = now.getTimezoneOffset(); // local offset in minutes (negative for east)
+  const totalOffsetMs = (uzbekistanOffset + localOffset) * 60 * 1000;
+  const uzbekistanDate = new Date(now.getTime() + totalOffsetMs);
+  return uzbekistanDate.toISOString();
+}
+
+/**
  * LocalStorage dan tanlangan printerni olish
  */
 function getSelectedPrinter(): string | null {
@@ -133,7 +147,7 @@ export const PrinterAPI = {
             foodName: item.foodName,
             quantity: item.quantity
           })),
-          createdAt: orderData.createdAt || new Date().toISOString()
+          createdAt: orderData.createdAt || getUzbekistanTime()
         })
       });
       return await res.json();
@@ -296,7 +310,7 @@ export const PrinterAPI = {
           foodName: item.foodName || item.name || 'Noma\'lum',
           quantity: item.quantity || 1
         })),
-        createdAt: new Date().toISOString()
+        createdAt: getUzbekistanTime()
       };
 
       console.log("=== SENDING TO PRINTER SERVER ===");

@@ -339,35 +339,62 @@ export function Dashboard() {
 
         if (data.newItems && data.newItems.length > 0) {
           const orderInfo = data.order || (data.allOrders && data.allOrders.length > 0 ? data.allOrders[data.allOrders.length - 1] : null);
+          const orderId = orderInfo?._id || '';
           const tableName = orderInfo?.tableName || "Noma'lum stol";
           const waiterName = orderInfo?.waiterName || "";
 
-          const printData = {
-            type: "YANGI_BUYURTMA",
-            tableName,
-            waiterName,
-            items: data.newItems.map((item: Record<string, unknown>) => ({
-              foodName: item.foodName || item.name || "Noma'lum",
-              quantity: item.quantity || 1
-            })),
-            timestamp: new Date().toISOString()
-          };
+          // DEDUPLICATION: Faqat hali chop etilmagan itemlarni filter qilish
+          const itemsToPrint: Array<{ foodName: string; quantity: number }> = [];
 
-          // 🖨️ LOG TO CONSOLE
-          logPrinterData("YANGI BUYURTMA / ITEM QO'SHILDI", printData, autoPrintEnabled);
+          for (const item of data.newItems) {
+            const itemId = (item as Record<string, unknown>)._id || '';
+            const foodName = (item.foodName || item.name || "Noma'lum") as string;
+            const quantity = (item.quantity || 1) as number;
 
-          if (autoPrintEnabled) {
-            PrinterAPI.printOrderDirect(
+            // Unique key: orderId + itemId + foodName + quantity
+            const printKey = `${orderId}-${itemId}-${foodName}-${quantity}`;
+
+            if (!printedItemsRef.current.has(printKey)) {
+              printedItemsRef.current.add(printKey);
+              itemsToPrint.push({ foodName, quantity });
+
+              // 60 sekunddan keyin tozalash (xotira uchun)
+              setTimeout(() => {
+                printedItemsRef.current.delete(printKey);
+              }, 60000);
+            } else {
+              console.log("🖨️ SKIPPED (already printed):", printKey);
+            }
+          }
+
+          // Faqat yangi itemlar bo'lsa chop etish
+          if (itemsToPrint.length > 0) {
+            const printData = {
+              type: "YANGI_BUYURTMA",
               tableName,
               waiterName,
-              data.newItems as Array<{ foodName?: string; name?: string; quantity?: number }>
-            ).then((result: { success: boolean; error?: string }) => {
-              console.log("🖨️ PRINT RESULT:", result.success ? "✅ MUVAFFAQIYATLI" : "❌ XATO", result.error || "");
-              setSocketDebug("PRINT: " + (result.success ? "SUCCESS" : "FAILED"));
-            }).catch((err: Error) => {
-              console.error("🖨️ PRINT ERROR:", err.message);
-              setSocketDebug("PRINT ERROR: " + err.message);
-            });
+              items: itemsToPrint,
+              timestamp: new Date().toISOString()
+            };
+
+            // 🖨️ LOG TO CONSOLE
+            logPrinterData("YANGI BUYURTMA / ITEM QO'SHILDI", printData, autoPrintEnabled);
+
+            if (autoPrintEnabled) {
+              PrinterAPI.printOrderDirect(
+                tableName,
+                waiterName,
+                itemsToPrint
+              ).then((result: { success: boolean; error?: string }) => {
+                console.log("🖨️ PRINT RESULT:", result.success ? "✅ MUVAFFAQIYATLI" : "❌ XATO", result.error || "");
+                setSocketDebug("PRINT: " + (result.success ? "SUCCESS" : "FAILED"));
+              }).catch((err: Error) => {
+                console.error("🖨️ PRINT ERROR:", err.message);
+                setSocketDebug("PRINT ERROR: " + err.message);
+              });
+            }
+          } else {
+            console.log("🖨️ ALL ITEMS ALREADY PRINTED - skipping");
           }
         }
       },

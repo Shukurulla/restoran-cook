@@ -45,8 +45,9 @@ const formatPreparationTime = (startedAt: string | undefined): string => {
   const start = new Date(startedAt);
   if (isNaN(start.getTime())) return '00:00';
 
-  const diff = Date.now() - start.getTime();
-  if (diff < 0) return '00:00';
+  // Server va client vaqt farqi bo'lishi mumkin, shuning uchun Math.max(0, diff) ishlatamiz
+  // Bu 10 soniyalik kechikishni bartaraf qiladi
+  const diff = Math.max(0, Date.now() - start.getTime());
 
   const totalSeconds = Math.floor(diff / 1000);
   const minutes = Math.floor(totalSeconds / 60);
