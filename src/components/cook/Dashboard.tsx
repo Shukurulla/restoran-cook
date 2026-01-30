@@ -334,13 +334,15 @@ export function Dashboard() {
         // Auto-print - yangi buyurtmalar uchun chek chiqarish
         const autoPrintEnabled = localStorage.getItem("autoPrint") !== "false";
 
-        // 🔑 INITIAL LOAD CHECK - faqat initial load tugagandan keyin chop etish
-        // Bu sahifa yangilanganida eski orderlar chop etilishini oldini oladi
+        // 🔑 new_kitchen_order kelganda initialLoadCompleteRef ni true qilamiz
+        // Bu kitchen_orders_updated da qayta ro'yxatdan o'tkazishni oldini oladi
         if (!initialLoadCompleteRef.current) {
-          console.log("🖨️ SKIPPED PRINT - initial load not complete yet (new_kitchen_order)");
+          console.log("🔑 Setting initialLoadComplete = true (from new_kitchen_order)");
+          initialLoadCompleteRef.current = true;
         }
 
-        if (data.newItems && data.newItems.length > 0 && initialLoadCompleteRef.current) {
+        // 🖨️ Yangi itemlar bo'lsa va autoPrint yoqilgan bo'lsa, print qilish
+        if (data.newItems && data.newItems.length > 0 && autoPrintEnabled) {
           const orderInfo = data.order || (data.allOrders && data.allOrders.length > 0 ? data.allOrders[data.allOrders.length - 1] : null);
           const orderId = orderInfo?._id || '';
           const tableName = orderInfo?.tableName || "Noma'lum stol";
