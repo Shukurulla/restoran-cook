@@ -349,54 +349,6 @@ class ApiService {
     return data.data || null;
   }
 
-  // ========== 🖨️ PRINTER PENDING SYSTEM ==========
-
-  /**
-   * Pending itemlarni olish (cook online bo'lganda)
-   */
-  async getPendingItems(categoryIds: string[]): Promise<Array<{
-    _id: string;
-    orderId: string;
-    orderNumber?: number;
-    tableName: string;
-    waiterName: string;
-    foodName: string;
-    quantity: number;
-    categoryId: string;
-    createdAt: string;
-  }>> {
-    const queryString = categoryIds.length > 0 ? `?categoryIds=${categoryIds.join(',')}` : '';
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const data = await this.request<any>(`/api/kitchen/pending-items${queryString}`);
-    return data.items || [];
-  }
-
-  /**
-   * Bir nechta item ni printer status yangilash
-   */
-  async bulkUpdatePrinterStatus(itemIds: string[], status: 'pending' | 'queued' | 'printed'): Promise<{
-    success: boolean;
-    modifiedCount?: number;
-    message?: string;
-  }> {
-    return this.request('/api/kitchen/bulk-update-printer-status', {
-      method: 'POST',
-      body: JSON.stringify({ itemIds, status })
-    });
-  }
-
-  /**
-   * Bitta item ni printer status yangilash
-   */
-  async updateItemPrinterStatus(itemId: string, status: 'pending' | 'queued' | 'printed'): Promise<{
-    success: boolean;
-    message?: string;
-  }> {
-    return this.request(`/api/kitchen/items/${itemId}/printer-status`, {
-      method: 'PATCH',
-      body: JSON.stringify({ status })
-    });
-  }
 }
 
 export const api = new ApiService();

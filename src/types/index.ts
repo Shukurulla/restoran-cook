@@ -71,12 +71,6 @@ export interface FoodItem {
   waiterApproved?: boolean;
 }
 
-export interface PrinterInfo {
-  name: string;
-  displayName: string;
-  isDefault: boolean;
-}
-
 export type TabType = 'new' | 'ready' | 'served' | 'cancelled';
 
 export interface Stats {
