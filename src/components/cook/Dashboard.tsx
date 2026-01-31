@@ -56,6 +56,11 @@ export function Dashboard() {
   // kitchen_orders_updated da fallback print uchun ishlatiladi
   const prevOrdersRef = useRef<Map<string, Set<string>>>(new Map());
 
+  // 🔒 PRINT LOCK - new_kitchen_order print qilganda, kitchen_orders_updated skip qilish uchun
+  // Bu ikki event bir vaqtda kelganda dublikat printni oldini oladi
+  const printLockRef = useRef<boolean>(false);
+  const printLockTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
   // Audio ref - professional approach
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const audioUnlockedRef = useRef(false);
@@ -347,6 +352,16 @@ export function Dashboard() {
 
         // 🖨️ Yangi itemlar bo'lsa va autoPrint yoqilgan bo'lsa, print qilish
         if (data.newItems && data.newItems.length > 0 && autoPrintEnabled) {
+          // 🔒 LOCK - kitchen_orders_updated fallback ni bloklash
+          printLockRef.current = true;
+          if (printLockTimeoutRef.current) {
+            clearTimeout(printLockTimeoutRef.current);
+          }
+          printLockTimeoutRef.current = setTimeout(() => {
+            printLockRef.current = false;
+            console.log("🔓 Print lock released");
+          }, 2000); // 2 soniyadan keyin lock ochiladi
+
           const orderInfo = data.order || (data.allOrders && data.allOrders.length > 0 ? data.allOrders[data.allOrders.length - 1] : null);
           const orderId = orderInfo?._id || '';
           const tableName = orderInfo?.tableName || "Noma'lum stol";
@@ -359,6 +374,7 @@ export function Dashboard() {
             quantity: (item.quantity || 1) as number
           }));
 
+          console.log("🔒 Print lock SET - blocking fallback for 2 seconds");
           const { added, skipped } = printQueue.addItems(orderId, tableName, waiterName, itemsForQueue);
 
           if (added > 0) {
@@ -377,6 +393,18 @@ export function Dashboard() {
           } else {
             console.log("🖨️ ALL ITEMS ALREADY IN QUEUE - skipping");
           }
+        } else if ((data.isNewOrder || data.itemsAddedToExisting) && autoPrintEnabled) {
+          // 🔒 newItems yo'q, lekin yangi order/item bor - lock qo'yish
+          // Bu kitchen_orders_updated ga print qilish imkonini beradi, lekin faqat bitta marta
+          printLockRef.current = true;
+          if (printLockTimeoutRef.current) {
+            clearTimeout(printLockTimeoutRef.current);
+          }
+          printLockTimeoutRef.current = setTimeout(() => {
+            printLockRef.current = false;
+            console.log("🔓 Print lock released (no newItems case)");
+          }, 500); // 0.5 soniya - fallback ishlashi uchun
+          console.log("🔒 Print lock SET (no newItems) - fallback will handle");
         }
       },
     );
@@ -433,6 +461,27 @@ export function Dashboard() {
         // new_kitchen_order kelmasa ham, bu yerda yangi itemlarni topamiz
         // ======================================================
         const autoPrintEnabled = localStorage.getItem("autoPrint") !== "false";
+
+        // 🔒 LOCK CHECK - agar new_kitchen_order allaqachon print qilgan bo'lsa, skip
+        if (printLockRef.current) {
+          console.log("🔒 FALLBACK BLOCKED - new_kitchen_order already handled print");
+          // State yangilash, lekin print qilmaslik
+          setItems(orders);
+          calculateStats(orders);
+
+          // prevOrdersRef ni yangilash
+          const newPrevOrders = new Map<string, Set<string>>();
+          orders.forEach(order => {
+            const itemIds = new Set<string>();
+            (order.items || []).forEach((item: { _id?: string; foodName?: string }, idx: number) => {
+              const itemKey = `${item._id || `idx-${idx}`}-${item.foodName || ''}`;
+              itemIds.add(itemKey);
+            });
+            newPrevOrders.set(order._id, itemIds);
+          });
+          prevOrdersRef.current = newPrevOrders;
+          return;
+        }
 
         if (autoPrintEnabled) {
           // Yangi itemlarni aniqlash
