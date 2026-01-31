@@ -10,6 +10,7 @@
  */
 
 import { PrinterAPI, PrintResult } from './printer';
+import { api } from './api';
 
 // ==================== TYPES ====================
 
@@ -18,6 +19,7 @@ export interface PrintJob {
   tableName: string;
   waiterName: string;
   items: Array<{ foodName: string; quantity: number }>;
+  itemIds: string[];             // Backend itemIds - print success da status yangilash uchun
   createdAt: number;             // Timestamp
   retryCount: number;
   status: 'pending' | 'printing' | 'completed' | 'failed';
@@ -58,7 +60,8 @@ class PrintQueueService {
     tableName: string,
     waiterName: string,
     items: Array<{ foodName: string; quantity: number }>,
-    orderId?: string
+    orderId?: string,
+    itemIds?: string[]
   ): boolean {
     // Unique ID yaratish (idempotency key)
     const jobId = this.generateJobId(orderId || '', tableName, items);
@@ -84,6 +87,7 @@ class PrintQueueService {
       tableName,
       waiterName,
       items: [...items], // Copy to prevent mutation
+      itemIds: itemIds || [], // Backend item IDs
       createdAt: Date.now(),
       retryCount: 0,
       status: 'pending'
@@ -113,6 +117,7 @@ class PrintQueueService {
 
     // Har bir itemni alohida tekshirish
     const newItems: Array<{ foodName: string; quantity: number }> = [];
+    const newItemIds: string[] = []; // Backend itemIds
 
     for (const item of items) {
       const itemKey = `${orderId}-${item.itemId || ''}-${item.foodName}-${item.quantity}`;
@@ -120,6 +125,9 @@ class PrintQueueService {
       if (!this.printedIds.has(itemKey)) {
         this.printedIds.add(itemKey);
         newItems.push({ foodName: item.foodName, quantity: item.quantity });
+        if (item.itemId) {
+          newItemIds.push(item.itemId);
+        }
         added++;
 
         // Timeout
@@ -141,6 +149,7 @@ class PrintQueueService {
         tableName,
         waiterName,
         items: newItems,
+        itemIds: newItemIds, // Backend item IDs - print success da status yangilash uchun
         createdAt: Date.now(),
         retryCount: 0,
         status: 'pending'
@@ -149,7 +158,7 @@ class PrintQueueService {
       this.queue.push(job);
       this.stats.pending++;
 
-      console.log(`🖨️ [QUEUE] Job created: ${jobId} with ${newItems.length} new items`);
+      console.log(`🖨️ [QUEUE] Job created: ${jobId} with ${newItems.length} new items, ${newItemIds.length} itemIds`);
     }
 
     return { added, skipped };
@@ -204,6 +213,17 @@ class PrintQueueService {
         if (idx > -1) this.queue.splice(idx, 1);
 
         console.log(`🖨️ [QUEUE] Job completed: ${job.id}`);
+
+        // 🖨️ Backend da status ni 'printed' ga yangilash
+        if (job.itemIds && job.itemIds.length > 0) {
+          try {
+            await api.bulkUpdatePrinterStatus(job.itemIds, 'printed');
+            console.log(`🖨️ [QUEUE] Updated ${job.itemIds.length} items to 'printed' status`);
+          } catch (err) {
+            console.error('🖨️ [QUEUE] Failed to update printer status:', err);
+            // Print muvaffaqiyatli bo'ldi, status yangilanmasa ham davom etamiz
+          }
+        }
       } else {
         // Retry
         job.retryCount++;

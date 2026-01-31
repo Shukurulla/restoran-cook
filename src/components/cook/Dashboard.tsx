@@ -253,7 +253,7 @@ export function Dashboard() {
       transports: ["websocket", "polling"],
     });
 
-    newSocket.on("connect", () => {
+    newSocket.on("connect", async () => {
       console.log("✅ SOCKET: CONNECTED!");
       console.log("SOCKET: Emitting cook_connect with restaurantId:", user.restaurantId, "cookId:", cookId);
       setSocketDebug("CONNECTED!");
@@ -263,6 +263,63 @@ export function Dashboard() {
         restaurantId: user.restaurantId,
         cookId,
       });
+
+      // 🖨️ PENDING ITEMS FETCH - Cook online bo'lganda pending itemlarni olish va print qilish
+      try {
+        const userCategories = user?.assignedCategories || [];
+        console.log("🖨️ [PENDING] Fetching pending items for categories:", userCategories);
+
+        if (userCategories.length > 0) {
+          const pendingItems = await api.getPendingItems(userCategories);
+          console.log("🖨️ [PENDING] Found", pendingItems.length, "pending items");
+
+          if (pendingItems.length > 0) {
+            // Itemlarni print queue ga qo'shish
+            const itemIds: string[] = [];
+
+            // Order bo'yicha guruhlash
+            const orderGroups = new Map<string, typeof pendingItems>();
+            pendingItems.forEach(item => {
+              const orderId = item.orderId;
+              if (!orderGroups.has(orderId)) {
+                orderGroups.set(orderId, []);
+              }
+              orderGroups.get(orderId)!.push(item);
+              itemIds.push(item._id);
+            });
+
+            // Har bir order uchun print queue ga qo'shish
+            orderGroups.forEach((items, orderId) => {
+              const firstItem = items[0];
+              const queueItems = items.map(item => ({
+                itemId: item._id,
+                foodName: item.foodName,
+                quantity: item.quantity
+              }));
+
+              const { added, skipped } = printQueue.addItems(
+                orderId,
+                firstItem.tableName,
+                firstItem.waiterName,
+                queueItems
+              );
+
+              console.log(`🖨️ [PENDING] Order ${orderId}: added=${added}, skipped=${skipped}`);
+            });
+
+            // Backend da status ni 'queued' ga yangilash
+            if (itemIds.length > 0) {
+              await api.bulkUpdatePrinterStatus(itemIds, 'queued');
+              console.log("🖨️ [PENDING] Updated", itemIds.length, "items to 'queued' status");
+            }
+
+            // 🔔 Ovoz chiqarish - pending itemlar bor
+            playNotificationSound();
+          }
+        }
+      } catch (err) {
+        console.error("🖨️ [PENDING] Error fetching pending items:", err);
+      }
     });
 
     newSocket.on("connect_error", (error) => {
