@@ -33,6 +33,9 @@ export interface OrderItem {
   requireDoubleConfirmation?: boolean; // Ikki marta tasdiqlash kerak
   kitchenStatus?: 'pending' | 'preparing' | 'ready' | 'served' | 'cancelled'; // Backend status
 
+  // 🖨️ Printer status - cook offline bo'lganda ham print tracking
+  printerStatus?: 'pending' | 'queued' | 'printed';
+
   // Tayyorlash boshlandi - oshpaz "Boshlandi" bosgan
   isStarted?: boolean;
   startedAt?: string;

@@ -424,8 +424,16 @@ export function Dashboard() {
           const tableName = orderInfo?.tableName || "Noma'lum stol";
           const waiterName = orderInfo?.waiterName || "";
 
+          // 🖨️ FAQAT printerStatus='pending' yoki undefined bo'lgan itemlarni print qilish
+          const pendingItems = data.newItems.filter((item: Record<string, unknown>) => {
+            const status = item.printerStatus as string | undefined;
+            return !status || status === 'pending';
+          });
+
+          console.log(`🖨️ [FILTER] Total newItems: ${data.newItems.length}, Pending items: ${pendingItems.length}`);
+
           // PrintQueue ga itemlarni qo'shish (deduplication avtomatik)
-          const itemsForQueue = data.newItems.map((item: Record<string, unknown>) => ({
+          const itemsForQueue = pendingItems.map((item: Record<string, unknown>) => ({
             itemId: (item._id || '') as string,
             foodName: (item.foodName || item.name || "Noma'lum") as string,
             quantity: (item.quantity || 1) as number
@@ -553,7 +561,7 @@ export function Dashboard() {
             const prevItemIds = prevOrdersRef.current.get(order._id) || new Set<string>();
             const newItems: Array<{ itemId: string; foodName: string; quantity: number }> = [];
 
-            (order.items || []).forEach((item: { _id?: string; foodName?: string; quantity?: number; kitchenStatus?: string }, idx: number) => {
+            (order.items || []).forEach((item: { _id?: string; foodName?: string; quantity?: number; kitchenStatus?: string; printerStatus?: string }, idx: number) => {
               const itemKey = `${item._id || `idx-${idx}`}-${item.foodName || ''}`;
 
               // Yangi itemlarni olish - faqat tayyor/bekor qilinganlarni CHIQARIB TASHLASH
@@ -563,7 +571,10 @@ export function Dashboard() {
                 item.kitchenStatus === 'served' ||
                 item.kitchenStatus === 'cancelled';
 
-              if (!prevItemIds.has(itemKey) && !isCompletedOrCancelled) {
+              // 🖨️ printerStatus tekshirish - faqat 'pending' yoki undefined bo'lsa print qilish
+              const isPrinterPending = !item.printerStatus || item.printerStatus === 'pending';
+
+              if (!prevItemIds.has(itemKey) && !isCompletedOrCancelled && isPrinterPending) {
                 newItems.push({
                   itemId: item._id || `idx-${idx}`,
                   foodName: item.foodName || "Noma'lum",
